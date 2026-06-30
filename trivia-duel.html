@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trivia Duel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Albert+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(130% 100% at 50% 0%, #241046 0%, #100726 70%, #0A0420 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 30px; font-family: 'Albert Sans', sans-serif; }
+@keyframes pulseRing { 0% { transform: scale(.55); opacity:.7; } 80%,100% { transform: scale(1.9); opacity:0; } }
+@keyframes blink { 0%,100% { opacity:.2; } 50% { opacity:1; } }
+@keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes ctaPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+@keyframes popIn { 0% { transform: scale(.4); opacity:0; } 55% { transform: scale(1.12); opacity:1; } 100% { transform: scale(1); } }
+@keyframes riseIn { 0% { transform: translateY(14px); opacity:0; } 100% { transform: translateY(0); opacity:1; } }
+.phone { width:412px; height:880px; border-radius:50px; background:#0C0722; padding:11px; box-shadow:0 50px 110px rgba(10,4,30,.7); flex-shrink:0; }
+.inner { width:100%; height:100%; border-radius:40px; overflow:hidden; display:flex; flex-direction:column; background:radial-gradient(125% 78% at 50% -8%, #3A1E72 0%, #1C0F40 52%, #160B33 100%); }
+.sbar { height:44px; display:flex; align-items:center; justify-content:space-between; padding:0 26px; flex-shrink:0; color:#fff; font-family:'Fredoka',sans-serif; z-index:5; }
+.content { flex:1; position:relative; overflow:hidden; display:flex; flex-direction:column; min-height:0; }
+.screen { height:100%; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+.screen::-webkit-scrollbar { display:none; }
+.navbar { flex-shrink:0; display:flex; justify-content:space-around; align-items:flex-end; padding:11px 18px 8px; background:rgba(11,6,30,.72); border-top:1px solid rgba(255,255,255,.07); }
+.hi { height:26px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.ms { font-family:'Material Symbols Rounded'; font-variation-settings:'FILL' 1; display:inline-flex; align-items:center; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="inner" id="app">
+    <div class="sbar">
+      <span style="font-size:15px;font-weight:500;">9:41</span>
+      <div style="display:flex;align-items:center;gap:7px;">
+        <div style="display:flex;align-items:flex-end;gap:2px;height:11px;">
+          <div style="width:3px;height:5px;background:#fff;border-radius:1px;opacity:.5;"></div>
+          <div style="width:3px;height:7px;background:#fff;border-radius:1px;opacity:.7;"></div>
+          <div style="width:3px;height:9px;background:#fff;border-radius:1px;opacity:.85;"></div>
+          <div style="width:3px;height:11px;background:#fff;border-radius:1px;"></div>
+        </div>
+        <div style="width:22px;height:11px;border:1.5px solid rgba(255,255,255,.6);border-radius:3px;padding:1.5px;display:flex;"><div style="flex:1;background:#fff;border-radius:1px;"></div></div>
+      </div>
+    </div>
+    <div class="content" id="content"></div>
+    <div class="navbar" id="navBar" style="display:none;"></div>
+    <div class="hi"><div style="width:130px;height:5px;border-radius:3px;background:#fff;opacity:.35;"></div></div>
+  </div>
+</div>
+
+<script>
+const QUESTION_BANK = [
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'What is the capital city of France?',                        options:['Paris','Rome','Madrid','Berlin'],              correct:0 },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'How many continents are there on Earth?',                    options:['5','6','7','8'],                               correct:2 },
+  { cat:'Science',   icon:'rocket_launch',   col:'#6AB7FF', q:'What planet do humans live on?',                             options:['Mars','Earth','Venus','Jupiter'],              correct:1 },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'What is the boiling point of water at sea level?',           options:['90°C','100°C','110°C','120°C'],               correct:1 },
+  { cat:'General',   icon:'pets',            col:'#3FD98A', q:'Which animal is known as man\'s best friend?',               options:['Cat','Dog','Horse','Rabbit'],                  correct:1 },
+  { cat:'Art',       icon:'palette',         col:'#FF914D', q:'What color do you get by mixing red and white?',             options:['Pink','Purple','Orange','Brown'],              correct:0 },
+  { cat:'General',   icon:'calendar_today',  col:'#FFC93C', q:'How many days are in a leap year?',                          options:['365','366','364','367'],                       correct:1 },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'What is the largest ocean on Earth?',                        options:['Atlantic Ocean','Indian Ocean','Arctic Ocean','Pacific Ocean'], correct:3 },
+  { cat:'General',   icon:'eco',             col:'#3FD98A', q:'What do bees produce?',                                      options:['Milk','Honey','Silk','Wax only'],              correct:1 },
+  { cat:'General',   icon:'calendar_today',  col:'#FFC93C', q:'Which month has 28 or 29 days?',                             options:['January','February','March','April'],          correct:1 },
+  { cat:'General',   icon:'language',        col:'#6AB7FF', q:'What is the primary language spoken in Brazil?',             options:['Spanish','Portuguese','English','French'],     correct:1 },
+  { cat:'Music',     icon:'music_note',      col:'#FF8FD4', q:'Which instrument has keys, pedals, and strings?',            options:['Guitar','Piano','Flute','Drum'],               correct:1 },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'What gas do humans need to breathe?',                        options:['Carbon dioxide','Oxygen','Nitrogen','Hydrogen'], correct:1 },
+  { cat:'General',   icon:'monetization_on', col:'#FFC93C', q:'What is the currency of the United States?',                 options:['Euro','Dollar','Pound','Yen'],                 correct:1 },
+  { cat:'Science',   icon:'rocket_launch',   col:'#6AB7FF', q:'Which planet is closest to the Sun?',                        options:['Venus','Earth','Mercury','Mars'],              correct:2 },
+  { cat:'Science',   icon:'eco',             col:'#34E0C8', q:'What do plants use to make food?',                           options:['Respiration','Photosynthesis','Digestion','Fermentation'], correct:1 },
+  { cat:'Sports',    icon:'sports_cricket',  col:'#3FD98A', q:'Which sport uses a bat and a ball and is popular in India?', options:['Football','Cricket','Tennis','Basketball'],    correct:1 },
+  { cat:'General',   icon:'lunch_dining',    col:'#FF914D', q:'What is the main ingredient in bread?',                      options:['Rice','Wheat flour','Corn','Oats'],            correct:1 },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'What is H₂O commonly known as?',                             options:['Salt','Water','Oxygen','Hydrogen'],            correct:1 },
+  { cat:'Geography', icon:'wb_sunny',        col:'#FFC93C', q:'Which direction does the sun rise from?',                    options:['North','South','East','West'],                 correct:2 },
+  { cat:'General',   icon:'pets',            col:'#3FD98A', q:'How many legs does a spider have?',                          options:['6','8','10','12'],                             correct:1 },
+  { cat:'General',   icon:'eco',             col:'#34E0C8', q:'Which season comes after winter?',                           options:['Autumn','Summer','Spring','Monsoon'],          correct:2 },
+  { cat:'General',   icon:'pets',            col:'#3FD98A', q:'What is the tallest land animal?',                           options:['Elephant','Giraffe','Horse','Rhino'],          correct:1 },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'Which metal is liquid at room temperature?',                 options:['Iron','Mercury','Gold','Aluminum'],            correct:1 },
+  { cat:'Science',   icon:'wb_sunny',        col:'#FFC93C', q:'What is the main source of energy for Earth?',               options:['The Moon','The Sun','Wind','Coal'],            correct:1 },
+  { cat:'Science',   icon:'rocket_launch',   col:'#6AB7FF', q:'What is the largest planet in our solar system?',             options:['Earth','Mars','Jupiter','Saturn'],             correct:2 },
+  { cat:'Science',   icon:'diamond',         col:'#34E0C8', q:'What is the hardest natural substance on Earth?',             options:['Gold','Iron','Diamond','Quartz'],              correct:2 },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which ocean is on the east coast of the United States?',      options:['Pacific Ocean','Indian Ocean','Atlantic Ocean','Arctic Ocean'], correct:2 },
+  { cat:'Science',   icon:'wb_sunny',        col:'#FFC93C', q:'How many colors are in a rainbow?',                           options:['5','6','7','8'],                               correct:2 },
+  { cat:'General',   icon:'language',        col:'#6AB7FF', q:'What is the main language spoken in Japan?',                  options:['Chinese','Japanese','Korean','Thai'],          correct:1 },
+  { cat:'Science',   icon:'favorite',        col:'#FF5D7A', q:'Which organ pumps blood through the body?',                   options:['Brain','Liver','Heart','Lungs'],               correct:2 },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'What is the capital of Italy?',                               options:['Venice','Rome','Milan','Naples'],              correct:1 },
+  { cat:'Music',     icon:'music_note',      col:'#FF8FD4', q:'Which instrument is known for black and white keys?',         options:['Violin','Flute','Piano','Drum'],               correct:2 },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'What is the freezing point of water?',                        options:['0°C','10°C','100°C','-10°C'],                correct:0 },
+  { cat:'General',   icon:'pets',            col:'#3FD98A', q:'Which animal is known for black and white stripes?',          options:['Tiger','Zebra','Leopard','Horse'],             correct:1 },
+  { cat:'General',   icon:'pets',            col:'#3FD98A', q:'What do you call a baby cat?',                                options:['Puppy','Cub','Kitten','Calf'],                 correct:2 },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which continent is Egypt located in?',                        options:['Asia','Europe','Africa','South America'],      correct:2 },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'What is the main gas in Earth\'s atmosphere?',                options:['Oxygen','Carbon dioxide','Nitrogen','Hydrogen'], correct:2 },
+  { cat:'Sports',    icon:'sports_soccer',   col:'#3FD98A', q:'Which sport is known as "the beautiful game"?',               options:['Basketball','Cricket','Football (Soccer)','Tennis'], correct:2 },
+  { cat:'General',   icon:'lunch_dining',    col:'#FF914D', q:'What is the main ingredient in sushi?',                       options:['Bread','Rice','Pasta','Potato'],               correct:1 },
+  { cat:'General',   icon:'change_history',  col:'#FFC93C', q:'What shape has three sides?',                                 options:['Square','Triangle','Circle','Rectangle'],      correct:1 },
+  { cat:'Science',   icon:'rocket_launch',   col:'#6AB7FF', q:'Which planet is known as the Blue Planet?',                   options:['Mars','Earth','Neptune','Venus'],              correct:1 },
+  { cat:'General',   icon:'pets',            col:'#3FD98A', q:'What do camels store in their humps?',                        options:['Water','Fat','Food','Bones'],                  correct:1 },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'What is the capital of Spain?',                               options:['Barcelona','Madrid','Seville','Valencia'],     correct:1 },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'Which metal is used in electrical wiring due to its conductivity?', options:['Gold','Copper','Silver','Iron'],         correct:1 },
+  { cat:'Geography', icon:'landscape',       col:'#8B6CF0', q:'What is the tallest mountain in the world?',                  options:['K2','Kilimanjaro','Everest','Denali'],         correct:2 },
+  { cat:'General',   icon:'calendar_today',  col:'#FFC93C', q:'Which month comes after June?',                               options:['May','July','August','September'],             correct:1 },
+  { cat:'Science',   icon:'wb_sunny',        col:'#34E0C8', q:'What is the primary color of the sky on a clear day?',        options:['Green','Blue','Red','Yellow'],                 correct:1 },
+  { cat:'General',   icon:'pets',            col:'#3FD98A', q:'Which animal is the largest land mammal?',                    options:['Elephant','Whale','Giraffe','Hippo'],          correct:0 },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'What do you call a scientist who studies rocks?',             options:['Biologist','Geologist','Astronomer','Chemist'], correct:1 },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which country has the largest number of time zones when overseas territories are included?', options:['Russia','France','United States','United Kingdom'], correct:1, difficulty:'hard' },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'Which element has the chemical symbol \'W\'?',                  options:['Tungsten','Tungstate','Tin','Titanium'],       correct:0, difficulty:'hard' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which country was formerly known as Ceylon?',                   options:['Myanmar','Sri Lanka','Nepal','Bhutan'],        correct:1, difficulty:'hard' },
+  { cat:'Geography', icon:'landscape',       col:'#8B6CF0', q:'Which mountain range separates Europe from Asia in the traditional geographic definition?', options:['Alps','Carpathians','Ural Mountains','Caucasus Mountains'], correct:2, difficulty:'hard' },
+  { cat:'Science',   icon:'favorite',        col:'#FF5D7A', q:'Which blood type is known as the universal donor for red blood cell transfusions?', options:['A+','AB+','O-','B-'], correct:2, difficulty:'hard' },
+  { cat:'Science',   icon:'calculate',       col:'#6AB7FF', q:'What is the smallest prime number greater than 100?',           options:['101','103','107','109'],                       correct:0, difficulty:'hard' },
+  { cat:'Science',   icon:'rocket_launch',   col:'#6AB7FF', q:'Which planet rotates on its side with an axial tilt of about 98 degrees?', options:['Neptune','Saturn','Uranus','Mercury'], correct:2, difficulty:'hard' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which country contains the city of Timbuktu?',                  options:['Niger','Chad','Mali','Sudan'],                 correct:2, difficulty:'hard' },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'What is the SI unit of electric current?',                      options:['Volt','Ohm','Ampere','Watt'],                  correct:2, difficulty:'hard' },
+  { cat:'Geography', icon:'landscape',       col:'#8B6CF0', q:'Which ocean current helps moderate the climate of Western Europe?', options:['California Current','Humboldt Current','Gulf Stream','Labrador Current'], correct:2, difficulty:'hard' },
+  { cat:'General',   icon:'language',        col:'#6AB7FF', q:'Which language has the largest number of native speakers worldwide?', options:['English','Spanish','Mandarin Chinese','Hindi'], correct:2, difficulty:'hard' },
+  { cat:'Science',   icon:'rocket_launch',   col:'#6AB7FF', q:'Which scientist introduced the three laws of planetary motion?', options:['Isaac Newton','Johannes Kepler','Galileo Galilei','Nicolaus Copernicus'], correct:1, difficulty:'hard' },
+  { cat:'Geography', icon:'landscape',       col:'#8B6CF0', q:'Which desert is the largest hot desert in the world?',          options:['Arabian Desert','Kalahari Desert','Sahara Desert','Gobi Desert'], correct:2, difficulty:'hard' },
+  { cat:'General',   icon:'psychology',      col:'#FFC93C', q:'How many permanent members are there on the United Nations Security Council?', options:['4','5','6','7'], correct:1, difficulty:'hard' },
+  { cat:'Science',   icon:'wb_sunny',        col:'#FFC93C', q:'Which gas makes up the majority of the Sun\'s mass?',           options:['Helium','Hydrogen','Oxygen','Nitrogen'],       correct:1, difficulty:'hard' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which European capital city is divided by the Danube River?',   options:['Vienna','Budapest','Bratislava','Belgrade'],   correct:1, difficulty:'hard' },
+  { cat:'Science',   icon:'favorite',        col:'#FF5D7A', q:'Which organ in the human body produces insulin?',               options:['Liver','Pancreas','Kidney','Gallbladder'],     correct:1, difficulty:'hard' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which country has the world\'s largest population by 2025 estimates?', options:['China','United States','India','Indonesia'], correct:2, difficulty:'hard' },
+  { cat:'Geography', icon:'landscape',       col:'#8B6CF0', q:'Which famous canal connects the Mediterranean Sea to the Red Sea?', options:['Panama Canal','Corinth Canal','Suez Canal','Kiel Canal'], correct:2, difficulty:'hard' },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'What is the only letter that does not appear in the periodic table\'s element symbols?', options:['J','Q','X','W'], correct:0, difficulty:'hard' },
+  { cat:'Geography', icon:'landscape',       col:'#8B6CF0', q:'Which sea is the lowest exposed point on Earth\'s surface?',     options:['Black Sea','Caspian Sea','Dead Sea','Red Sea'], correct:2, difficulty:'hard' },
+  { cat:'Science',   icon:'favorite',        col:'#FF5D7A', q:'Which scientist is credited with discovering penicillin?',      options:['Louis Pasteur','Alexander Fleming','Robert Koch','Joseph Lister'], correct:1, difficulty:'hard' },
+  { cat:'General',   icon:'language',        col:'#6AB7FF', q:'Which country has the most official languages?',                options:['India','South Africa','Zimbabwe','Bolivia'],   correct:1, difficulty:'hard' },
+  { cat:'Science',   icon:'calculate',       col:'#6AB7FF', q:'Which mathematical constant is approximately equal to 2.71828?', options:['π','φ','e','√2'], correct:2, difficulty:'hard' },
+  { cat:'Geography', icon:'landscape',       col:'#8B6CF0', q:'Which country is home to the ancient city of Petra?',           options:['Israel','Jordan','Egypt','Saudi Arabia'],      correct:1, difficulty:'hard' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which of these countries has the largest land area?',           options:['Australia','India','Brazil','Canada'],          correct:3, difficulty:'medium' },
+  { cat:'General',   icon:'pets',            col:'#3FD98A', q:'Which of these animals is NOT a mammal?',                      options:['Whale','Bat','Penguin','Dolphin'],              correct:2, difficulty:'medium' },
+  { cat:'General',   icon:'calendar_today',  col:'#FFC93C', q:'Which event happened first?',                                  options:['The first human landed on the Moon','The first email was sent','The Berlin Wall fell','The first iPhone was released'], correct:0, difficulty:'medium' },
+  { cat:'General',   icon:'sports_cricket',  col:'#3FD98A', q:'Which object is usually the heaviest?',                        options:['Basketball','Bowling ball','Soccer ball','Volleyball'], correct:1, difficulty:'medium' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which country spans both Europe and Asia?',                    options:['Poland','Turkey','Norway','Portugal'],          correct:1, difficulty:'medium' },
+  { cat:'Science',   icon:'calculate',       col:'#6AB7FF', q:'Which of these numbers is a prime number?',                    options:['39','51','53','57'],                           correct:2, difficulty:'medium' },
+  { cat:'General',   icon:'calendar_today',  col:'#FFC93C', q:'Which month always has exactly four full weeks plus extra days?', options:['February','April','June','November'],          correct:0, difficulty:'medium' },
+  { cat:'General',   icon:'compass_calibration', col:'#FFC93C', q:'If you are facing north and turn 270° clockwise, which direction are you facing?', options:['East','South','West','North'], correct:2, difficulty:'medium' },
+  { cat:'Science',   icon:'rocket_launch',   col:'#6AB7FF', q:'Which of these is closest to the Earth?',                      options:['Mars','The Moon','Venus','The Sun'],            correct:1, difficulty:'medium' },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'Which liquid freezes at the highest temperature?',             options:['Mercury','Water','Ethanol','Olive oil'],        correct:1, difficulty:'medium' },
+  { cat:'Science',   icon:'rocket_launch',   col:'#6AB7FF', q:'Which is the odd one out?',                                    options:['Venus','Mars','Jupiter','Pluto'],              correct:3, difficulty:'medium' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which of these cities is located furthest north?',             options:['Rome','Paris','London','Madrid'],              correct:2, difficulty:'medium' },
+  { cat:'General',   icon:'directions_car',  col:'#FF914D', q:'Which item would usually take the longest to travel around the Earth at the equator?', options:['Commercial airplane','High-speed train','Passenger car','Walking'], correct:3, difficulty:'medium' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which of these countries is an island nation?',                 options:['Portugal','Ireland','Austria','Hungary'],       correct:1, difficulty:'medium' },
+  { cat:'General',   icon:'electronics',     col:'#6AB7FF', q:'Which object uses GPS most directly?',                         options:['Microwave','Smartphone','Television','Printer'], correct:1, difficulty:'medium' },
+  { cat:'General',   icon:'pets',            col:'#3FD98A', q:'Which of these animals can naturally fly?',                     options:['Flying squirrel','Penguin','Bat','Ostrich'],    correct:2, difficulty:'medium' },
+  { cat:'General',   icon:'history',         col:'#FF914D', q:'Which came first?',                                            options:['The printing press','The steam engine','The telephone','The airplane'], correct:0, difficulty:'medium' },
+  { cat:'General',   icon:'change_history',  col:'#FFC93C', q:'Which shape has the greatest number of sides?',                options:['Hexagon','Pentagon','Octagon','Heptagon'],     correct:2, difficulty:'medium' },
+  { cat:'General',   icon:'lunch_dining',    col:'#FF914D', q:'Which beverage normally contains the most caffeine per serving?', options:['Black tea','Espresso shot','Hot chocolate','Orange juice'], correct:1, difficulty:'medium' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which country is crossed by the Equator?',                     options:['Chile','Kenya','Argentina','Japan'],            correct:1, difficulty:'medium' },
+  { cat:'General',   icon:'eco',             col:'#3FD98A', q:'Which of these is renewable?',                                 options:['Coal','Natural gas','Wind','Oil'],              correct:2, difficulty:'medium' },
+  { cat:'General',   icon:'lunch_dining',    col:'#FF914D', q:'If a recipe doubles every ingredient, what happens to the cooking time in most cases?', options:['It always doubles','It always halves','It usually stays similar with adjustments','It becomes four times longer'], correct:2, difficulty:'medium' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which of these countries does NOT use the euro?',               options:['Portugal','Austria','Switzerland','Ireland'],   correct:2, difficulty:'medium' },
+  { cat:'Science',   icon:'rocket_launch',   col:'#6AB7FF', q:'Which planet is larger than Earth?',                           options:['Mars','Mercury','Venus','Saturn'],              correct:3, difficulty:'medium' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'Which pair of countries shares the longest international land border?', options:['United States & Mexico','China & India','Canada & United States','Russia & China'], correct:2, difficulty:'medium' },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'Lightning is seen before thunder is heard because light travels faster than sound.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'The Amazon River flows through Peru before reaching Brazil.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'Geography', icon:'landscape',       col:'#8B6CF0', q:'The Great Wall of China is visible from the Moon with the naked eye.', type:'true_false', correct:1, difficulty:'medium' },
+  { cat:'Science',   icon:'pets',            col:'#3FD98A', q:'Sharks existed on Earth before dinosaurs.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'Science',   icon:'rocket_launch',   col:'#6AB7FF', q:'Venus is the hottest planet in the Solar System.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'Geography', icon:'landscape',       col:'#8B6CF0', q:'Every continent has at least one desert.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'Sound can travel through the vacuum of space.', type:'true_false', correct:1, difficulty:'medium' },
+  { cat:'General',   icon:'lunch_dining',    col:'#FF914D', q:'Bananas are technically classified as berries.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'The capital of Australia is Sydney.', type:'true_false', correct:1, difficulty:'medium' },
+  { cat:'General',   icon:'pets',            col:'#3FD98A', q:'Octopuses have three hearts.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'Glass is made primarily from sand.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'Geography', icon:'landscape',       col:'#8B6CF0', q:'Mount Kilimanjaro is located in Kenya.', type:'true_false', correct:1, difficulty:'medium' },
+  { cat:'Science',   icon:'favorite',        col:'#FF5D7A', q:'The human body has more than 200 bones.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'Science',   icon:'rocket_launch',   col:'#6AB7FF', q:'Mercury is larger than Earth.', type:'true_false', correct:1, difficulty:'medium' },
+  { cat:'Geography', icon:'landscape',       col:'#8B6CF0', q:'The Pacific Ocean is larger than all of Earth\'s land area combined.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'General',   icon:'pets',            col:'#3FD98A', q:'Penguins are found only in the Arctic.', type:'true_false', correct:1, difficulty:'medium' },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'The chemical symbol for silver is Ag.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'General',   icon:'calendar_today',  col:'#FFC93C', q:'A leap year occurs every four years without exception.', type:'true_false', correct:1, difficulty:'medium' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'The Nile River flows into the Mediterranean Sea.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'Science',   icon:'science',         col:'#34E0C8', q:'Diamonds are formed from compressed carbon.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'Science',   icon:'favorite',        col:'#FF5D7A', q:'The human heart is located exactly in the center of the chest.', type:'true_false', correct:1, difficulty:'medium' },
+  { cat:'Geography', icon:'public',          col:'#8B6CF0', q:'The Equator passes through Brazil.', type:'true_false', correct:0, difficulty:'medium' },
+  { cat:'General',   icon:'pets',            col:'#3FD98A', q:'All spiders build webs to catch prey.', type:'true_false', correct:1, difficulty:'medium' },
+  { cat:'Science',   icon:'wb_sunny',        col:'#FFC93C', q:'The Earth\'s core is hotter than the surface of the Sun.', type:'true_false', correct:1, difficulty:'medium' },
+  { cat:'General',   icon:'lunch_dining',    col:'#FF914D', q:'Honey can remain edible for thousands of years if stored properly.', type:'true_false', correct:0, difficulty:'medium' },
+];
+function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a; }
+let QUESTIONS = shuffle(QUESTION_BANK).slice(0,5);
+const CATS = [
+  {name:'General',   icon:'psychology',   color:'#FFC93C'},
+  {name:'Science',   icon:'science',      color:'#34E0C8'},
+  {name:'Geography', icon:'public',       color:'#8B6CF0'},
+  {name:'History',   icon:'history_edu',  color:'#FF914D'},
+  {name:'Art',       icon:'palette',      color:'#FF5D7A'},
+  {name:'Sports',    icon:'sports_soccer',color:'#3FD98A'},
+  {name:'Movies',    icon:'movie',        color:'#6AB7FF'},
+  {name:'Music',     icon:'music_note',   color:'#FF8FD4'},
+];
+const FRIENDS = [
+  {name:'Priya',  initial:'P', c1:'#B79CFF', c2:'#8B6CF0', tc:'#1A0A40', online:true,  lvl:13},
+  {name:'Marcus', initial:'M', c1:'#FFB27A', c2:'#FF914D', tc:'#3A1A00', online:true,  lvl:9},
+  {name:'Yuki',   initial:'Y', c1:'#FFE07A', c2:'#FFC93C', tc:'#3A2A00', online:true,  lvl:15},
+  {name:'Dana',   initial:'D', c1:'#7BE8DC', c2:'#34E0C8', tc:'#0C3B36', online:false, lvl:10},
+  {name:'Theo',   initial:'T', c1:'#8FD9FF', c2:'#5BA8E0', tc:'#08263A', online:false, lvl:8},
+];
+const QUICK_OPP = {name:'Alex', initial:'A', c1:'#7BE8DC', c2:'#34E0C8', tc:'#0C3B36', lvl:11};
+const QT = 12;
+
+// =========== SUPABASE ===========
+const SB_URL = 'https://itotpmqbhbgsmnnjovia.supabase.co';
+const SB_KEY = 'sb_publishable_vSnQ_dRlJBuhaOXOd9LiLw_poorec0c';
+let sb = null;
+try { sb = supabase.createClient(SB_URL, SB_KEY); } catch(e) { console.error('Supabase init failed:', e); }
+
+function getP(){ return s.profile||{display_name:'Player',xp:0,wins:0,losses:0,streak:0,total_correct:0,total_questions:0,coins:0}; }
+function lvl(p){ return Math.floor((p.xp||0)/1000)+1; }
+function xpInLvl(p){ return (p.xp||0)%1000; }
+function acc(p){ return p.total_questions>0?Math.round(p.total_correct/p.total_questions*100):0; }
+function pInit(p){ return ((p.display_name||'?')[0]).toUpperCase(); }
+function canClaimDailyBonus(){
+  if(!s.user||!s.profile) return false;
+  const lastClaim=s.profile.last_daily_claim?new Date(s.profile.last_daily_claim):null;
+  const now=new Date();
+  if(!lastClaim) return true;
+  const diff=now-lastClaim;
+  return diff>(24*60*60*1000); // 24h in ms
+}
+async function claimDailyBonus(){
+  if(!canClaimDailyBonus()) return;
+  if(!sb||!s.user) return;
+  const newXp=(s.profile.xp||0)+50;
+  const now=new Date().toISOString();
+  const {error}=await sb.from('profiles').update({xp:newXp,last_daily_claim:now}).eq('id',s.user.id);
+  if(error){ console.error('Daily bonus update failed:',error); return; }
+  s.profile.xp=newXp;
+  s.profile.last_daily_claim=now;
+  render();
+}
+function seasonBadge(p){
+  const xp=p.xp||0; const wins=p.wins||0;
+  const score=wins*100+xp;
+  if(score>=50000) return{badge:'crown',col:'#FFD24A',label:'Legend'};
+  if(score>=20000) return{badge:'military_tech',col:'#34E0C8',label:'Gold'};
+  if(score>=5000) return{badge:'emoji_events',col:'#FF914D',label:'Silver'};
+  return{badge:'star_border',col:'#B9A9E0',label:'Bronze'};
+}
+
+async function sbInit(){
+  render(); // show auth screen immediately — no Supabase needed
+  if(!sb){ return; } // CDN unavailable, stay on auth screen
+  try {
+    const {data:{session}} = await sb.auth.getSession();
+    if(session){ s.user=session.user; await loadProfile(); s.screen='home'; s.navTab='home'; render(); }
+    sb.auth.onAuthStateChange(async(ev,sess)=>{
+      if(ev==='SIGNED_OUT'){ s.user=null; s.profile=null; s.screen='auth'; s.authError=''; render(); }
+      if(ev==='SIGNED_IN'&&sess){ s.user=sess.user; await loadProfile(); s.screen='home'; s.navTab='home'; render(); }
+    });
+  } catch(e) { console.error('Session check failed:', e); }
+}
+
+async function loadProfile(){
+  if(!sb) return;
+  const {data} = await sb.from('profiles').select('*').eq('id',s.user.id).single();
+  if(data){ s.profile=data; s.inviteCode=data.invite_code||genInviteCode(); return; }
+  const name = s.user.user_metadata?.display_name || s.user.email.split('@')[0];
+  const code=genInviteCode();
+  const {data:np} = await sb.from('profiles').upsert({id:s.user.id,display_name:name,xp:0,wins:0,losses:0,streak:0,total_correct:0,total_questions:0,coins:100,invite_code:code}).select().single();
+  s.profile=np; s.inviteCode=code;
+}
+function genInviteCode(){ return Math.random().toString(36).substring(2,8).toUpperCase(); }
+
+async function doSignIn(){
+  if(!sb){s.authError='Connection unavailable. Check your network.';render();return;}
+  const email=document.getElementById('auth-email')?.value?.trim();
+  const pass=document.getElementById('auth-pass')?.value;
+  if(!email||!pass){s.authError='Please fill in all fields.';render();return;}
+  s.authLoading=true;s.authError='';render();
+  const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
+  s.authLoading=false;
+  if(error){s.authError=error.message;render();return;}
+  s.user=data.user; await loadProfile(); s.screen='home'; s.navTab='home'; render();
+}
+
+async function doSignUp(){
+  if(!sb){s.authError='Connection unavailable. Check your network.';render();return;}
+  const name=document.getElementById('auth-name')?.value?.trim();
+  const email=document.getElementById('auth-email')?.value?.trim();
+  const pass=document.getElementById('auth-pass')?.value;
+  if(!name||!email||!pass){s.authError='Please fill in all fields.';render();return;}
+  if(pass.length<6){s.authError='Password must be at least 6 characters.';render();return;}
+  s.authLoading=true;s.authError='';render();
+  const {data,error}=await sb.auth.signUp({email,password:pass,options:{data:{display_name:name}}});
+  s.authLoading=false;
+  if(error){s.authError=error.message;render();return;}
+  s.user=data.user;
+  await sb.from('profiles').upsert({id:s.user.id,display_name:name,xp:0,wins:0,losses:0,streak:0,total_correct:0,total_questions:0,coins:100});
+  await loadProfile(); s.screen='home'; s.navTab='home'; render();
+}
+
+async function doSignOut(){ if(sb) await sb.auth.signOut(); else { s.user=null; s.profile=null; s.screen='auth'; render(); } }
+
+function playAsGuest(){
+  s.user=null;
+  s.profile={display_name:'Guest',xp:0,wins:0,losses:0,streak:0,total_correct:0,total_questions:0,coins:0};
+  s.screen='home'; s.navTab='home'; render();
+}
+
+async function saveMatch(){
+  if(!sb||!s.user||!s.profile) return;
+  const p=s.profile;
+  const tied=s.youScore===s.oppScore;
+  const result=s.youWon?'win':tied?'tie':'loss';
+  const xpGain=s.youWon?100:tied?30:0;
+  const coinsGain=s.youWon?120:tied?60:0;
+  await Promise.all([
+    sb.from('matches').insert({player_id:s.user.id,player_score:s.youScore,opp_score:s.oppScore,player_correct:s.correctCount,total_questions:QUESTIONS.length,category:s.matchCategory,result}),
+    sb.from('profiles').update({xp:p.xp+xpGain,wins:p.wins+(s.youWon?1:0),losses:p.losses+(result==='loss'?1:0),streak:s.youWon?p.streak+1:0,total_correct:p.total_correct+s.correctCount,total_questions:p.total_questions+QUESTIONS.length,coins:p.coins+coinsGain}).eq('id',s.user.id),
+  ]);
+  await loadProfile();
+}
+
+async function fetchLeaderboard(){
+  if(!sb){s.lbData=[];s.lbLoading=false;render();return;}
+  s.lbLoading=true; render();
+  const {data} = await sb.from('profiles').select('id,display_name,xp,wins,losses').order('wins',{ascending:false}).limit(10);
+  s.lbData=data||[]; s.lbLoading=false; render();
+}
+
+const s = {
+  screen:'auth', navTab:'home', accent:'#FF5D7A',
+  authMode:'login', authLoading:false, authError:'',
+  user:null, profile:null, lbData:[], lbLoading:false,
+  phase:'answering', qIndex:0, timeLeft:QT,
+  youScore:0, oppScore:0, youAnswer:null, oppAnswered:false,
+  youGain:0, oppGain:0, youFaster:false, cd:3, youWon:false,
+  opp:{...QUICK_OPP},
+  pu:{fifty:1,freeze:1,double:1}, puUsed:{}, doubleActive:false,
+  oppFrozen:false, hidden:[], directChallenge:false,
+  category:'General', correctCount:0,
+  oppWill:false, oppTime:null, oppRight:false, oppChoice:null, matchCategory:'General',
+  friendsTab:'list', inviteCode:'', inviteInputVal:'', friendsChallenges:[],
+  mode:'classic', youLives:3, oppLives:3, timeAttackRemain:60, lastWinner:null,
+  quitConfirm:false,
+};
+
+let matchTimer,cdTimer,qTimer,revealTimer,chooseTimer;
+function clearTimers(){ clearTimeout(matchTimer);clearInterval(cdTimer);clearInterval(qTimer);clearTimeout(revealTimer);clearTimeout(chooseTimer); }
+
+function ic(name,sz,col,extra=''){return `<span class="ms" style="font-size:${sz}px;color:${col};${extra}">${name}</span>`;}
+function av(sz,c1,c2,init,tc='#fff',bw=0,bc='transparent'){
+  return `<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:linear-gradient(135deg,${c1},${c2});display:flex;align-items:center;justify-content:center;font-family:'Fredoka',sans-serif;font-weight:600;font-size:${Math.round(sz*.4)}px;color:${tc};${bw?`border:${bw}px solid ${bc};`:''}">${init}</div>`;
+}
+function pts(t){ return Math.round(100 + Math.max(0,(QT-t))/QT*150); }
+
+// Nav
+function goHome(){clearTimers();s.screen='home';s.navTab='home';render();}
+function goLeaderboard(){clearTimers();s.screen='leaderboard';s.navTab='leaderboard';fetchLeaderboard();}
+function goFriends(){clearTimers();s.screen='friends';s.navTab='friends';s.friendsTab='list';render();}
+function joinBattle(){
+  const code=s.inviteInputVal?.trim()?.toUpperCase();
+  if(!code||code.length!==6){s.inviteInputVal='';render();return;}
+  if(code===s.inviteCode){s.inviteInputVal='';render();return;}
+  s.matchCategory='General'; s.category='General';
+  s.opp={...QUICK_OPP,inviteCode:code};
+  s.directChallenge=true;
+  beginMatch(false);
+}
+function goProfile(){clearTimers();s.screen='profile';s.navTab='profile';render();}
+function goMode(){clearTimers();s.screen='mode';render();}
+function chooseMode(m){s.mode=m;if(m==='timeattack'){beginTimeAttack();}else{s.screen='category';render();}}
+function goCategory(){clearTimers();s.screen='category';render();}
+function onSurprise(){chooseCategory(CATS[Math.floor(Math.random()*CATS.length)].name);}
+function chooseCategory(cat){s.category=cat;s.matchCategory=cat;s.opp={...QUICK_OPP};beginMatch(false);}
+function challengeFriendIdx(i){const f=FRIENDS[i];if(!f.online)return;s.opp={...f};s.category='General';s.matchCategory='General';beginMatch(true);}
+
+// Game
+function beginTimeAttack(){
+  s.matchCategory='General'; s.category='General'; s.opp={...QUICK_OPP};
+  QUESTIONS = shuffle(QUESTION_BANK).slice(0,100);
+  clearTimers(); s.correctCount=0; s.directChallenge=false;
+  Object.assign(s,{youScore:0,oppScore:0,qIndex:0,pu:{fifty:1,freeze:1,double:1},puUsed:{},doubleActive:false,oppFrozen:false,hidden:[],screen:'matching',timeAttackRemain:60});
+  render();
+  matchTimer=setTimeout(toCountdown, 2300);
+}
+function beginMatch(direct){
+  if(s.mode==='survival'){ s.youLives=3; s.oppLives=3; }
+  if(s.mode==='handicap' && s.lastWinner){
+    const isYouChamp=s.lastWinner==='you';
+    QUESTIONS = shuffle(QUESTION_BANK.filter(q=>!q.difficulty || q.difficulty===(isYouChamp?'hard':'easy'))).slice(0,5);
+  } else {
+    QUESTIONS = shuffle(QUESTION_BANK).slice(0,5);
+  }
+  clearTimers(); s.correctCount=0; s.directChallenge=direct;
+  Object.assign(s,{youScore:0,oppScore:0,qIndex:0,pu:{fifty:1,freeze:1,double:1},puUsed:{},doubleActive:false,oppFrozen:false,hidden:[],screen:'matching'});
+  render();
+  matchTimer=setTimeout(toCountdown, direct?1700:2300);
+}
+function onRematch(){s.lastWinner=s.youWon?'you':'opp';beginMatch(s.directChallenge);}
+function toCountdown(){
+  clearTimers(); s.screen='countdown'; s.cd=3; render();
+  cdTimer=setInterval(()=>{ s.cd--; if(s.cd<=0){clearInterval(cdTimer);startQuestion(0);}else render(); },850);
+}
+function startQuestion(i){
+  clearTimers();
+  const q=QUESTIONS[i];
+  s.oppWill=Math.random()<0.85;
+  const oppTimeBudget=s.mode==='timeattack'?2.5:QT;
+  s.oppTime=s.oppWill ? +(1.4+Math.random()*(oppTimeBudget-1.5)).toFixed(1) : null;
+  s.oppRight=Math.random()<0.6;
+  s.oppChoice=s.oppRight ? q.correct : (()=>{let w;do{w=Math.floor(Math.random()*4);}while(w===q.correct);return w;})();
+  const questionTimer=s.mode==='timeattack'?s.timeAttackRemain:QT;
+  Object.assign(s,{screen:'duel',phase:'answering',qIndex:i,timeLeft:questionTimer,youAnswer:null,oppAnswered:false,youGain:0,oppGain:0,puUsed:{},doubleActive:false,oppFrozen:false,hidden:[]});
+  render();
+  qTimer=setInterval(tick,100);
+}
+function tick(){
+  s.timeLeft=+(s.timeLeft-0.1).toFixed(2);
+  if(s.mode==='timeattack') s.timeAttackRemain=Math.max(0, s.timeAttackRemain-0.1);
+  const elapsed=(s.mode==='timeattack'?QT:QT)-s.timeLeft;
+  if(!s.oppAnswered && !s.oppFrozen && s.oppTime!=null && elapsed>=s.oppTime){s.oppAnswered=true; updateDuelHeader();}
+  if(s.timeLeft<=0 || (s.mode==='timeattack' && s.timeAttackRemain<=0)){clearInterval(qTimer);s.timeLeft=0;reveal(true);return;}
+  updateTimer();
+}
+function updateTimer(){
+  const n=document.getElementById('tnum'); const r=document.getElementById('tring');
+  const displayTime=s.mode==='timeattack'?s.timeAttackRemain:s.timeLeft;
+  const maxTime=s.mode==='timeattack'?60:QT;
+  if(n) n.textContent=Math.ceil(displayTime);
+  if(r){
+    const pct=displayTime/maxTime, circ=2*Math.PI*34;
+    r.style.strokeDashoffset=circ*(1-pct);
+    r.style.stroke=pct>.5?s.accent:pct>.25?'#FFC93C':'#FF6B6B';
+  }
+}
+function updateDuelHeader(){
+  const el=document.getElementById('oppCheck');
+  if(el) el.style.display='flex';
+}
+function choose(i){
+  if(s.phase!=='answering')return;
+  clearInterval(qTimer); s.youAnswer=i; render();
+  chooseTimer=setTimeout(()=>reveal(false),650);
+}
+function reveal(timedOut){
+  clearInterval(qTimer); if(s.phase==='revealed')return;
+  const q=QUESTIONS[s.qIndex];
+  const youTime=timedOut?QT:(QT-s.timeLeft);
+  const youRight=s.youAnswer===q.correct;
+  if(youRight) s.correctCount++;
+  const oppInTime=s.oppWill&&s.oppTime!=null&&s.oppTime<QT;
+  const oppRight=oppInTime&&s.oppRight;
+
+  if(s.mode==='survival'){
+    if(!youRight) s.youLives--;
+    if(!oppRight) s.oppLives--;
+    if(s.youLives<=0||s.oppLives<=0) return setTimeout(toSummary,1200);
+  } else if(s.mode==='timeattack'){
+    if(youRight) s.youScore++;
+    if(oppRight) s.oppScore++;
+  } else {
+    const dbl=s.doubleActive?2:1;
+    const youGain=youRight?pts(youTime)*dbl:0;
+    const oppGain=oppRight?pts(s.oppTime):0;
+    s.youFaster=youRight&&oppRight&&youTime<s.oppTime;
+    Object.assign(s,{youScore:s.youScore+youGain,oppScore:s.oppScore+oppGain,youGain,oppGain});
+  }
+  Object.assign(s,{phase:'revealed',oppAnswered:oppInTime});
+  render();
+  revealTimer=setTimeout(nextQ, s.mode==='survival'?2200:3400);
+}
+function nextQ(){
+  clearTimeout(revealTimer);
+  if(s.mode==='timeattack' && s.timeAttackRemain<=0) return toSummary();
+  const ni=s.qIndex+1;
+  if(ni>=QUESTIONS.length) toSummary();
+  else startQuestion(ni);
+}
+function toSummary(){clearTimers();s.youWon=s.youScore>s.oppScore;s.screen='summary';render();saveMatch();}
+function quitMatch(){s.quitConfirm=true;render();}
+function confirmQuit(){goHome();}
+function cancelQuit(){s.quitConfirm=false;render();}
+function useFifty(){
+  if(s.phase!=='answering'||s.pu.fifty<=0||s.puUsed.fifty)return;
+  const q=QUESTIONS[s.qIndex]; const wrong=[];
+  for(let i=0;i<4;i++)if(i!==q.correct)wrong.push(i);
+  while(wrong.length>2)wrong.splice(Math.floor(Math.random()*wrong.length),1);
+  s.hidden=wrong; s.pu.fifty--; s.puUsed.fifty=true; render();
+}
+function useFreeze(){
+  if(s.phase!=='answering'||s.pu.freeze<=0||s.puUsed.freeze)return;
+  s.oppFrozen=true; s.oppAnswered=false; s.oppWill=false;
+  s.pu.freeze--; s.puUsed.freeze=true; render();
+}
+function useDouble(){
+  if(s.phase!=='answering'||s.pu.double<=0||s.puUsed.double)return;
+  s.doubleActive=true; s.pu.double--; s.puUsed.double=true; render();
+}
+
+// Render
+function render(){
+  document.getElementById('app').style.cssText+=`;--accent:${s.accent}`;
+  const navScreens=['home','leaderboard','friends','profile'];
+  const nb=document.getElementById('navBar');
+  nb.style.display=navScreens.includes(s.screen)?'flex':'none';
+  if(navScreens.includes(s.screen)) nb.innerHTML=renderNav();
+  const screens={auth:renderAuth,home:renderHome,mode:renderMode,category:renderCategory,friends:renderFriends,matching:renderMatching,countdown:renderCountdown,duel:renderDuel,summary:renderSummary,leaderboard:renderLeaderboard,profile:renderProfile};
+  document.getElementById('content').innerHTML=`<div class="screen">${(screens[s.screen]||renderHome)()}</div>`;
+}
+
+function renderNav(){
+  return [
+    {id:'home',      icon:'home',          label:'Home',    fn:'goHome()'},
+    {id:'leaderboard',icon:'military_tech',label:'Ranks',   fn:'goLeaderboard()'},
+    {id:'friends',   icon:'group',         label:'Friends', fn:'goFriends()'},
+    {id:'profile',   icon:'person',        label:'Profile', fn:'goProfile()'},
+  ].map(n=>{
+    const a=s.navTab===n.id;
+    return `<div onclick="${n.fn}" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;">
+      ${ic(n.icon,25,a?s.accent:'#6B5A8E')}
+      <span style="font-family:'Fredoka',sans-serif;font-size:11px;font-weight:${a?600:500};color:${a?s.accent:'#6B5A8E'};">${n.label}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderAuth(){
+  const login=s.authMode==='login';
+  return `<div style="height:100%;display:flex;flex-direction:column;justify-content:center;padding:28px 24px;color:#fff;">
+    <div style="text-align:center;margin-bottom:32px;">
+      <div style="width:72px;height:72px;border-radius:24px;background:linear-gradient(135deg,var(--accent),#C13468);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">${ic('bolt',38,'#fff')}</div>
+      <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:32px;color:#fff;">Trivia Duel</div>
+      <div style="font-size:13px;color:#B9A9E0;margin-top:4px;">Real-time head-to-head trivia</div>
+    </div>
+    <div style="display:flex;background:rgba(255,255,255,.06);border-radius:999px;padding:4px;margin-bottom:20px;">
+      <div onclick="s.authMode='login';s.authError='';render()" style="flex:1;text-align:center;padding:10px;border-radius:999px;background:${login?'var(--accent)':'transparent'};color:${login?'#fff':'#B9A9E0'};font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;cursor:pointer;">Log In</div>
+      <div onclick="s.authMode='signup';s.authError='';render()" style="flex:1;text-align:center;padding:10px;border-radius:999px;background:${!login?'var(--accent)':'transparent'};color:${!login?'#fff':'#B9A9E0'};font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;cursor:pointer;">Sign Up</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:11px;">
+      ${!login?`<input id="auth-name" type="text" placeholder="Display name" style="padding:14px 16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:15px;outline:none;width:100%;">`:''}
+      <input id="auth-email" type="email" placeholder="Email address" style="padding:14px 16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:15px;outline:none;width:100%;">
+      <input id="auth-pass" type="password" placeholder="Password" style="padding:14px 16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:15px;outline:none;width:100%;">
+    </div>
+    ${s.authError?`<div style="margin-top:10px;padding:9px 13px;border-radius:11px;background:rgba(255,107,107,.12);border:1px solid rgba(255,107,107,.3);color:#FF8F8F;font-size:13px;text-align:center;">${s.authError}</div>`:''}
+    <div onclick="${login?'doSignIn()':'doSignUp()'}" style="margin-top:22px;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:#fff;padding:16px;border-radius:18px;font-family:'Fredoka',sans-serif;font-weight:600;font-size:17px;cursor:${s.authLoading?'default':'pointer'};box-shadow:0 12px 26px rgba(255,93,122,.4);opacity:${s.authLoading?.55:1};">
+      ${s.authLoading?'Please wait…':(login?`${ic('login',20,'#fff')} Log In`:`${ic('person_add',20,'#fff')} Create Account`)}
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:18px;">
+      <div style="flex:1;height:1px;background:rgba(255,255,255,.1);"></div>
+      <span style="font-size:12px;color:#7A6A9A;">or</span>
+      <div style="flex:1;height:1px;background:rgba(255,255,255,.1);"></div>
+    </div>
+    <div onclick="playAsGuest()" style="display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid rgba(255,255,255,.15);color:#B9A9E0;padding:14px;border-radius:18px;font-family:'Fredoka',sans-serif;font-weight:600;font-size:16px;cursor:pointer;margin-top:2px;">
+      ${ic('person_outline',20,'#B9A9E0')} Continue as Guest
+    </div>
+  </div>`;
+}
+
+function renderHome(){
+  const p=getP();const l=lvl(p);const sb_info=seasonBadge(p);const canClaim=canClaimDailyBonus();
+  return `<div style="display:flex;flex-direction:column;padding:6px 22px 16px;color:#fff;">
+    <div style="display:flex;align-items:center;gap:13px;margin-top:6px;">
+      <div style="position:relative;">
+        ${av(52,'#FF8FA8','#FF5D7A',pInit(p),'#fff',2.5,'rgba(255,255,255,.85)')}
+        <div style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;background:${sb_info.col};display:flex;align-items:center;justify-content:center;border:2px solid #1C0F40;">${ic(sb_info.badge,11,'#fff')}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px;">
+        <span style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:19px;line-height:1;">${p.display_name}</span>
+        <span style="font-size:12.5px;color:#B9A9E0;">Level ${l} · ${sb_info.label} Tier</span>
+      </div>
+      <div style="flex:1;"></div>
+      <div style="display:flex;align-items:center;gap:6px;background:rgba(255,201,60,.14);border:1px solid rgba(255,201,60,.3);padding:7px 12px;border-radius:999px;">
+        ${ic('monetization_on',18,'#FFC93C')}
+        <span style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;color:#FFC93C;">${p.coins.toLocaleString()}</span>
+      </div>
+    </div>
+
+    <div onclick="goMode()" style="margin-top:18px;border-radius:30px;padding:22px;background:linear-gradient(140deg,var(--accent),#C13468);position:relative;overflow:hidden;box-shadow:0 18px 40px rgba(193,52,104,.45);cursor:pointer;">
+      <div style="position:absolute;right:-32px;top:-32px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.12);"></div>
+      <div style="position:absolute;right:34px;bottom:-54px;width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.08);"></div>
+      <span style="font-size:12px;font-weight:600;letter-spacing:.14em;color:rgba(255,255,255,.82);">REAL-TIME · HEAD TO HEAD</span>
+      <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:30px;line-height:1.05;margin-top:9px;max-width:200px;">Challenge a rival</div>
+      <div style="display:flex;align-items:center;gap:13px;margin-top:18px;">
+        <div style="display:flex;align-items:center;gap:8px;background:#fff;color:#C13468;padding:13px 22px;border-radius:999px;font-family:'Fredoka',sans-serif;font-weight:600;font-size:17px;box-shadow:0 8px 18px rgba(0,0,0,.2);animation:ctaPulse 2.4s ease-in-out infinite;">
+          ${ic('bolt',21,'#C13468')} Play Duel
+        </div>
+        <span style="font-size:12.5px;color:rgba(255,255,255,.85);max-width:96px;line-height:1.3;">Fastest correct answer wins</span>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:11px;margin-top:17px;">
+      <div onclick="goMode()" style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:14px 12px;display:flex;flex-direction:column;gap:10px;cursor:pointer;">
+        ${ic('military_tech',25,'#34E0C8')}
+        <div><div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;">Ranked</div><div style="font-size:11px;color:#B9A9E0;">Win trophies</div></div>
+      </div>
+      <div onclick="goFriends()" style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:14px 12px;display:flex;flex-direction:column;gap:10px;cursor:pointer;">
+        ${ic('group',25,'#8B6CF0')}
+        <div><div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;">Friends</div><div style="font-size:11px;color:#B9A9E0;">Invite &amp; play</div></div>
+      </div>
+      <div onclick="goMode()" style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:14px 12px;display:flex;flex-direction:column;gap:10px;cursor:pointer;">
+        ${ic('sports_esports',25,'#FFC93C')}
+        <div><div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;">Practice</div><div style="font-size:11px;color:#B9A9E0;">Solo drills</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:11px;margin-top:13px;">
+      <div style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:13px 10px;text-align:center;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:23px;">${p.wins}</div>
+        <div style="font-size:11px;color:#B9A9E0;margin-top:2px;">Wins</div>
+      </div>
+      <div style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:13px 10px;text-align:center;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:23px;color:#FF914D;display:flex;align-items:center;justify-content:center;gap:3px;">${p.streak}${ic('local_fire_department',19,'#FF914D')}</div>
+        <div style="font-size:11px;color:#B9A9E0;margin-top:2px;">Streak</div>
+      </div>
+      <div style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:13px 10px;text-align:center;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:23px;color:#34E0C8;">${acc(p)}%</div>
+        <div style="font-size:11px;color:#B9A9E0;margin-top:2px;">Accuracy</div>
+      </div>
+    </div>
+
+    ${canClaim?`<div onclick="claimDailyBonus()" style="margin-top:14px;display:flex;align-items:center;gap:13px;background:linear-gradient(100deg,rgba(255,201,60,.18),rgba(255,201,60,.04));border:1px solid rgba(255,201,60,.28);border-radius:20px;padding:13px 15px;cursor:pointer;">
+      <div style="width:42px;height:42px;border-radius:13px;background:rgba(255,201,60,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        ${ic('card_giftcard',23,'#FFC93C')}
+      </div>
+      <div style="flex:1;"><div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:15px;">Claim Daily Bonus</div><div style="font-size:12px;color:#B9A9E0;">+50 XP · play within 24h</div></div>
+      ${ic('check_circle',24,'#FFC93C')}
+    </div>`:`<div style="margin-top:14px;display:flex;align-items:center;gap:13px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:13px 15px;opacity:.6;">
+      <div style="width:42px;height:42px;border-radius:13px;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        ${ic('schedule',23,'#B9A9E0')}
+      </div>
+      <div style="flex:1;"><div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:15px;">Daily Bonus Claimed</div><div style="font-size:12px;color:#B9A9E0;">Return tomorrow for more</div></div>
+      ${ic('check',24,'#B9A9E0')}
+    </div>`}
+  </div>`;
+}
+
+function renderMode(){
+  return `<div style="display:flex;flex-direction:column;padding:8px 22px 18px;color:#fff;">
+    <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+      <div onclick="goHome()" style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;">${ic('arrow_back',22,'#C9BCEC')}</div>
+      <span style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:22px;">Game Modes</span>
+    </div>
+    <div style="font-size:13px;color:#B9A9E0;margin-top:6px;">Choose your battle style.</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:20px;">
+      <div onclick="chooseMode('classic')" style="background:rgba(255,255,255,.05);border:1.5px solid rgba(255,93,122,.3);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:9px;cursor:pointer;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${ic('bolt',26,'#FF5D7A')}
+          <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:18px;">Classic</div>
+        </div>
+        <div style="font-size:12px;color:#B9A9E0;margin-left:36px;">Traditional 5 questions. First to answer correctly wins points.</div>
+      </div>
+      <div onclick="chooseMode('timeattack')" style="background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.08);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:9px;cursor:pointer;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${ic('schedule',26,'#FFC93C')}
+          <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:18px;">Time Attack</div>
+        </div>
+        <div style="font-size:12px;color:#B9A9E0;margin-left:36px;">60 seconds. Whoever answers the most questions correctly wins.</div>
+      </div>
+      <div onclick="chooseMode('survival')" style="background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.08);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:9px;cursor:pointer;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${ic('favorite',26,'#FF6B6B')}
+          <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:18px;">Survival</div>
+        </div>
+        <div style="font-size:12px;color:#B9A9E0;margin-left:36px;">3 lives each. Wrong answer = lose 1 life. Last player standing wins.</div>
+      </div>
+      <div onclick="chooseMode('handicap')" style="background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.08);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:9px;cursor:pointer;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${ic('trending_up',26,'#34E0C8')}
+          <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:18px;">Handicap</div>
+        </div>
+        <div style="font-size:12px;color:#B9A9E0;margin-left:36px;">Reigning champion gets harder questions. Challenger gets easier ones.</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderCategory(){
+  return `<div style="display:flex;flex-direction:column;padding:8px 22px 18px;color:#fff;">
+    <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+      <div onclick="goHome()" style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;">${ic('arrow_back',22,'#C9BCEC')}</div>
+      <span style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:22px;">Choose a category</span>
+    </div>
+    <div style="font-size:13px;color:#B9A9E0;margin-top:6px;">Pick your battlefield — we'll find a rival.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:18px;">
+      ${CATS.map(c=>{
+        const isGeneral=c.name==='General';
+        return `<div onclick="${isGeneral?`chooseCategory('${c.name}')`:''}" style="background:${isGeneral?'rgba(255,255,255,.05)':'rgba(255,255,255,.02)'};border:1px solid ${isGeneral?'rgba(255,255,255,.08)':'rgba(255,255,255,.04)'};border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:10px;cursor:${isGeneral?'pointer':'default'};opacity:${isGeneral?'1':'.4'};position:relative;">
+          <div style="width:44px;height:44px;border-radius:13px;background:${c.color}${isGeneral?'22':'08'};display:flex;align-items:center;justify-content:center;">${ic(c.icon,24,isGeneral?c.color:'#8676A8')}</div>
+          <div><div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:15px;color:${isGeneral?'#fff':'#8676A8'}">${c.name}</div><div style="font-size:11px;color:${isGeneral?'#B9A9E0':'#7A6A9A'};">${isGeneral?'Tap to play':'Coming Soon'}</div></div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div onclick="onSurprise()" style="display:flex;align-items:center;justify-content:center;gap:9px;margin-top:18px;background:linear-gradient(135deg,var(--accent),#C13468);color:#fff;padding:16px;border-radius:18px;font-family:'Fredoka',sans-serif;font-weight:600;font-size:16px;cursor:pointer;box-shadow:0 12px 26px rgba(255,93,122,.4);">
+      ${ic('casino',21,'#fff')}Surprise me
+    </div>
+  </div>`;
+}
+
+function renderFriends(){
+  const isList=s.friendsTab==='list';
+  return `<div style="display:flex;flex-direction:column;padding:8px 22px 0;color:#fff;height:100%;">
+    <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+      <div onclick="goHome()" style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;">${ic('arrow_back',22,'#C9BCEC')}</div>
+      <span style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:22px;">Friends Battles</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <div onclick="s.friendsTab='list';render()" style="flex:1;text-align:center;padding:10px;border-radius:999px;background:${isList?'var(--accent)':'rgba(255,255,255,.06)'};color:${isList?'#fff':'#B9A9E0'};font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;cursor:pointer;">${ic('group',16,isList?'#fff':'#B9A9E0','margin-right:4px;')}Share Code</div>
+      <div onclick="s.friendsTab='join';render()" style="flex:1;text-align:center;padding:10px;border-radius:999px;background:${!isList?'var(--accent)':'rgba(255,255,255,.06)'};color:${!isList?'#fff':'#B9A9E0'};font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;cursor:pointer;">${ic('login',16,!isList?'#fff':'#B9A9E0','margin-right:4px;')}Join Battle</div>
+    </div>
+    ${isList?`
+      <div style="margin-top:18px;padding:14px;border-radius:16px;background:rgba(255,93,122,.12);border:1px solid rgba(255,93,122,.25);">
+        <div style="font-size:12px;color:#FFC2CE;margin-bottom:6px;">Your invite code</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="flex:1;font-family:'Fredoka',sans-serif;font-weight:700;font-size:20px;letter-spacing:2px;color:#FF5D7A;">${s.inviteCode||'—'}</div>
+          <div onclick="navigator.clipboard.writeText(s.inviteCode||'');s.friendsTab='copied';setTimeout(()=>{s.friendsTab='list';render();},1500);render()" style="padding:7px 12px;border-radius:8px;background:rgba(255,93,122,.3);color:#FF5D7A;font-family:'Fredoka',sans-serif;font-weight:600;font-size:13px;cursor:pointer;">${ic('content_copy',16,'#FF5D7A','font-size:14px;')}</div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:#B9A9E0;margin-top:12px;">Share this code with friends to challenge them in ranked battles.</div>
+    `:`
+      <div style="margin-top:18px;">
+        <div style="display:flex;gap:10px;">
+          <input id="invite-input" type="text" placeholder="Enter friend's code" style="flex:1;padding:12px 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:15px;outline:none;text-transform:uppercase;" oninput="s.inviteInputVal=this.value.toUpperCase();this.value=s.inviteInputVal;">
+          <div onclick="joinBattle()" style="padding:12px 16px;border-radius:12px;background:var(--accent);color:#fff;font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;cursor:pointer;">${ic('check',18,'#fff')}</div>
+        </div>
+        <div style="font-size:13px;color:#B9A9E0;margin-top:12px;">Ask a friend for their 6-digit code to challenge them.</div>
+      </div>
+    `}
+  </div>`;
+}
+
+function renderMatching(){
+  const opp=s.opp; const direct=s.directChallenge;
+  return `<div style="display:flex;flex-direction:column;height:100%;padding:6px 24px 22px;color:#fff;">
+    <div style="display:flex;align-items:center;margin-top:6px;">
+      <div onclick="goHome()" style="width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;">${ic('close',22,'#C9BCEC')}</div>
+      <div style="flex:1;display:flex;justify-content:center;">
+        <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.08);padding:8px 15px;border-radius:999px;">
+          ${ic('psychology',18,'#FFC93C')}
+          <span style="font-family:'Fredoka',sans-serif;font-weight:500;font-size:14px;">${s.matchCategory}</span>
+        </div>
+      </div>
+      <div style="width:42px;"></div>
+    </div>
+    <div style="text-align:center;margin-top:24px;">
+      <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:13px;letter-spacing:.18em;color:var(--accent);">${direct?'DIRECT CHALLENGE':'FINDING OPPONENT'}</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:9px;margin-top:8px;">
+        <span style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:25px;">${direct?'Challenging':'Matchmaking'}</span>
+        <span style="display:inline-flex;gap:4px;padding-bottom:6px;">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 1.2s infinite;"></span>
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 1.2s infinite .25s;"></span>
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 1.2s infinite .5s;"></span>
+        </span>
+      </div>
+    </div>
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:9px;animation:floaty 3.2s ease-in-out infinite;">
+        ${av(90,'#FF8FA8','#FF5D7A','M','#fff',3,'rgba(255,255,255,.9)')}
+        <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:15px;">You</div>
+      </div>
+      <div style="z-index:3;width:56px;height:56px;border-radius:50%;background:#FFC93C;color:#2A1556;font-family:'Fredoka',sans-serif;font-weight:700;font-size:19px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(255,201,60,.5);border:4px solid #1C0F40;margin:0 -16px;">VS</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:9px;">
+        <div style="position:relative;width:90px;height:90px;display:flex;align-items:center;justify-content:center;">
+          <div style="position:absolute;inset:0;border-radius:50%;border:2px solid #34E0C8;animation:pulseRing 2.1s ease-out infinite;"></div>
+          <div style="position:absolute;inset:0;border-radius:50%;border:2px solid #34E0C8;animation:pulseRing 2.1s ease-out infinite .7s;"></div>
+          <div style="position:absolute;inset:0;border-radius:50%;border:2px solid #34E0C8;animation:pulseRing 2.1s ease-out infinite 1.4s;"></div>
+          ${direct ? av(90,opp.c1,opp.c2,opp.initial,opp.tc,3,'rgba(255,255,255,.9)') : `<div style="width:90px;height:90px;border-radius:50%;background:rgba(52,224,200,.14);border:2px dashed rgba(52,224,200,.6);display:flex;align-items:center;justify-content:center;font-family:'Fredoka',sans-serif;font-weight:700;font-size:40px;color:#34E0C8;">?</div>`}
+        </div>
+        <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:15px;color:#34E0C8;">${direct?opp.name:'Searching...'}</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:center;margin-bottom:20px;">
+      <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#8B6CF0,#6A4ED0);border:2px solid #1C0F40;animation:blink 1.5s infinite;"></div>
+      <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#34E0C8,#1FB8A6);border:2px solid #1C0F40;margin-left:-8px;animation:blink 1.5s infinite .3s;"></div>
+      <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#FF914D,#E76A2B);border:2px solid #1C0F40;margin-left:-8px;animation:blink 1.5s infinite .6s;"></div>
+      <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#FFC93C,#E0A91F);border:2px solid #1C0F40;margin-left:-8px;animation:blink 1.5s infinite .9s;"></div>
+    </div>
+    <div style="display:flex;justify-content:center;">
+      <div onclick="goHome()" style="display:flex;align-items:center;gap:8px;border:1.5px solid rgba(255,255,255,.25);color:#fff;padding:14px 30px;border-radius:999px;font-family:'Fredoka',sans-serif;font-weight:500;font-size:16px;cursor:pointer;">Cancel</div>
+    </div>
+  </div>`;
+}
+
+function renderCountdown(){
+  const opp=s.opp;
+  return `<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;gap:36px;">
+    <div style="display:flex;align-items:center;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:7px;">
+        ${av(64,'#FF8FA8','#FF5D7A','M','#fff',3,'rgba(255,255,255,.9)')}
+        <span style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;">You</span>
+      </div>
+      <div style="z-index:2;width:48px;height:48px;border-radius:50%;background:#FFC93C;color:#2A1556;font-family:'Fredoka',sans-serif;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(255,201,60,.5);border:4px solid #1C0F40;margin:0 -14px;">VS</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:7px;">
+        ${av(64,opp.c1,opp.c2,opp.initial,opp.tc,3,'rgba(255,255,255,.9)')}
+        <span style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;">${opp.name}</span>
+      </div>
+    </div>
+    <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:120px;line-height:1;color:var(--accent);animation:popIn .5s ease-out;text-shadow:0 12px 40px rgba(255,93,122,.5);">${s.cd}</div>
+    <div style="font-family:'Fredoka',sans-serif;font-weight:500;font-size:17px;color:#D7CEF0;">Get ready!</div>
+  </div>`;
+}
+
+function renderDuel(){
+  const q=QUESTIONS[s.qIndex]; const opp=s.opp;
+  const answering=s.phase==='answering'; const revealed=s.phase==='revealed';
+  const displayTime=s.mode==='timeattack'?s.timeAttackRemain:s.timeLeft;
+  const maxTime=s.mode==='timeattack'?60:QT;
+  const pct=displayTime/maxTime; const circ=2*Math.PI*34;
+  const tColor=pct>.5?s.accent:pct>.25?'#FFC93C':'#FF6B6B';
+  const letters=['A','B','C','D'];
+
+  const isTrueFalse=q.type==='true_false';
+  const opts=isTrueFalse
+    ?[
+      {text:'True',val:0},{text:'False',val:1}
+    ].map((opt,i)=>{
+      let box=`display:flex;align-items:center;justify-content:center;gap:12px;padding:20px 24px;border-radius:18px;cursor:${answering?'pointer':'default'};border:2px solid;font-family:'Fredoka',sans-serif;font-weight:700;font-size:20px;`;
+      let col='#fff';
+      if(revealed){
+        const ok=opt.val===q.correct; const youPick=opt.val===s.youAnswer; const oppPick=s.oppAnswered&&opt.val===s.oppChoice;
+        if(ok){box+=`background:rgba(63,217,138,.15);border-color:#3FD98A;`;col='#3FD98A';}
+        else if(youPick){box+=`background:rgba(255,107,107,.12);border-color:#FF6B6B;`;col='#FF6B6B';}
+        else{box+=`background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08);opacity:.45;`;col='#B9A9E0';}
+      } else {
+        const sel=opt.val===s.youAnswer;
+        box+=sel?`background:rgba(255,255,255,.12);border-color:var(--accent);`:`background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);`;
+        col=sel?'var(--accent)':'#B9A9E0';
+      }
+      return `<div onclick="${answering?`choose(${opt.val})`:''}" style="${box};color:${col};">${opt.text}</div>`;
+    }).join('')
+    :q.options.map((text,i)=>{
+      if(s.hidden.includes(i))return '';
+      let box=`display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:16px;cursor:${answering?'pointer':'default'};border:1.5px solid;`;
+      let badge=`width:30px;height:30px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'Fredoka',sans-serif;font-weight:700;font-size:14px;flex-shrink:0;`;
+      let sfx='';
+      if(revealed){
+        const ok=i===q.correct; const youPick=i===s.youAnswer; const oppPick=s.oppAnswered&&i===s.oppChoice&&!s.oppFrozen;
+        if(ok){box+=`background:rgba(63,217,138,.15);border-color:#3FD98A;`;badge+=`background:#3FD98A;color:#0B2E1B;`;}
+        else if(youPick){box+=`background:rgba(255,107,107,.12);border-color:#FF6B6B;`;badge+=`background:#FF6B6B;color:#fff;`;}
+        else{box+=`background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08);opacity:.45;`;badge+=`background:rgba(255,255,255,.08);color:#B9A9E0;`;}
+        if(ok) sfx+=ic('check_circle',24,'#3FD98A');
+        if(youPick&&!ok) sfx+=ic('cancel',24,'#FF6B6B');
+        if(oppPick) sfx+=av(28,opp.c1,opp.c2,opp.initial,opp.tc);
+      } else {
+        const sel=i===s.youAnswer;
+        box+=sel?`background:rgba(255,255,255,.12);border-color:var(--accent);`:`background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);`;
+        badge+=sel?`background:var(--accent);color:#fff;`:`background:rgba(255,255,255,.1);color:#B9A9E0;`;
+      }
+      return `<div onclick="${answering?`choose(${i})`:''}" style="${box}"><div style="${badge}">${letters[i]}</div><span style="flex:1;font-size:15px;">${text}</span>${sfx}</div>`;
+    }).join('');
+
+  const dots=QUESTIONS.map((_,i)=>{
+    let st=`height:8px;border-radius:4px;transition:all .3s;width:${i===s.qIndex?22:8}px;`;
+    st+=i<s.qIndex?`background:#3FD98A;`:i===s.qIndex?`background:var(--accent);`:`background:rgba(255,255,255,.18);`;
+    return `<div style="${st}"></div>`;
+  }).join('');
+
+  const pus=[
+    {key:'fifty', icon:'filter_2',  label:'50/50',  col:'#8B6CF0', fn:'useFifty()'},
+    {key:'freeze',icon:'ac_unit',   label:'Freeze', col:'#8FD9FF', fn:'useFreeze()'},
+    {key:'double',icon:'bolt',      label:'2×',     col:'#FFC93C', fn:'useDouble()'},
+  ];
+  const puHtml=pus.map(p=>{
+    const cnt=s.pu[p.key]; const used=s.puUsed[p.key]; const dis=cnt<=0||used;
+    return `<div onclick="${!dis&&answering?p.fn:''}" style="flex:1;position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 6px;border-radius:14px;border:1px solid ${dis?'rgba(255,255,255,.08)':`${p.col}55`};background:${dis?'rgba(255,255,255,.04)':`${p.col}18`};cursor:${!dis&&answering?'pointer':'default'};opacity:${dis?.4:1};">
+      ${ic(p.icon,20,dis?'#8676A8':p.col)}
+      <span style="font-size:10.5px;font-family:'Fredoka',sans-serif;font-weight:600;color:${dis?'#8676A8':p.col};">${p.label}</span>
+      ${!used&&cnt>0?`<div style="position:absolute;top:-4px;right:-4px;width:16px;height:16px;border-radius:50%;background:${p.col};font-size:9px;font-family:'Fredoka',sans-serif;font-weight:700;color:#1C0F40;display:flex;align-items:center;justify-content:center;">${cnt}</div>`:''}
+    </div>`;
+  }).join('');
+
+  const youRight=s.youAnswer===q.correct;
+  const resCol=youRight?'#3FD98A':'#FF6B6B';
+  const resTitle=s.youAnswer===null?"Time's up!":youRight?(s.youFaster?'You were faster!':'Correct!'):'Wrong!';
+
+  const scoreText=s.mode==='timeattack'?`${s.youScore} correct`:s.mode==='survival'?`${s.youLives} live${s.youLives!==1?'s':''}`:` ${s.youScore} pts`;
+  const oppScoreText=s.mode==='timeattack'?`${s.oppScore} correct`:s.mode==='survival'?`${s.oppLives} live${s.oppLives!==1?'s':''}`:` ${s.oppScore} pts`;
+
+  return `<div style="display:flex;flex-direction:column;height:100%;padding:8px 20px 14px;color:#fff;">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+      <div style="flex:1;display:flex;align-items:center;gap:9px;">
+        ${av(42,'#FF8FA8','#FF5D7A','M','#fff',2,'rgba(255,255,255,.85)')}
+        <div style="display:flex;flex-direction:column;gap:3px;">
+          <span style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;">You</span>
+          <span style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:13px;color:var(--accent);">${scoreText}</span>
+        </div>
+      </div>
+      <div style="position:relative;width:72px;height:72px;flex-shrink:0;">
+        <svg width="72" height="72" style="position:absolute;top:0;left:0;transform:rotate(-90deg);">
+          <circle cx="36" cy="36" r="34" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="4"/>
+          <circle id="tring" cx="36" cy="36" r="34" fill="none" stroke="${tColor}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${circ*(1-pct)}"/>
+        </svg>
+        <div style="position:absolute;inset:4px;border-radius:50%;background:#1C0F40;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <span id="tnum" style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:27px;line-height:1;">${Math.ceil(s.mode==='timeattack'?s.timeAttackRemain:s.timeLeft)}</span>
+          <span style="font-size:8.5px;color:#B9A9E0;letter-spacing:.14em;">SEC</span>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;gap:9px;flex-direction:row-reverse;">
+        <div style="position:relative;">
+          ${av(42,opp.c1,opp.c2,opp.initial,opp.tc)}
+          ${s.oppFrozen?`<div style="position:absolute;right:-3px;bottom:-3px;width:20px;height:20px;border-radius:50%;background:#8FD9FF;border:2px solid #1C0F40;display:flex;align-items:center;justify-content:center;">${ic('ac_unit',13,'#08263A')}</div>`:''}
+          <div id="oppCheck" style="position:absolute;right:-3px;bottom:-3px;width:20px;height:20px;border-radius:50%;background:#34E0C8;border:2px solid #1C0F40;display:${s.oppAnswered&&!s.oppFrozen?'flex':'none'};align-items:center;justify-content:center;">${ic('check',13,'#0C3B36')}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-end;">
+          <span style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;">${opp.name}</span>
+          <span style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:13px;color:#34E0C8;">${oppScoreText}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress + category -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;">
+      <div style="display:flex;align-items:center;gap:5px;">${dots}</div>
+      <div style="display:flex;align-items:center;gap:5px;background:${q.col}22;border:1px solid ${q.col}55;padding:5px 10px;border-radius:999px;">
+        ${ic(q.icon,14,q.col)}<span style="font-size:11px;font-family:'Fredoka',sans-serif;font-weight:600;color:${q.col};">${q.cat}</span>
+      </div>
+    </div>
+
+    <!-- Question -->
+    <div style="margin-top:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <span style="font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--accent);font-family:'Fredoka',sans-serif;">QUESTION ${s.qIndex+1} OF ${QUESTIONS.length}</span>
+        ${s.doubleActive?`<div style="display:flex;align-items:center;gap:4px;background:rgba(255,93,122,.2);border:1px solid var(--accent);padding:3px 9px;border-radius:999px;">${ic('bolt',13,s.accent)}<span style="font-size:10px;font-family:'Fredoka',sans-serif;font-weight:700;color:var(--accent);">2× POINTS</span></div>`:''}
+      </div>
+      <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:21px;line-height:1.18;margin-top:9px;">${q.q}</div>
+    </div>
+
+    <!-- Options -->
+    <div style="display:flex;flex-direction:column;gap:9px;margin-top:13px;">${opts}</div>
+
+    <!-- Power-ups -->
+    ${answering&&!isTrueFalse?`<div style="display:flex;gap:9px;margin-top:13px;">${puHtml}</div>`:''}
+
+    <!-- Bottom -->
+    <div style="margin-top:auto;padding-top:12px;">
+      ${revealed
+        ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;animation:riseIn .3s ease-out;">
+            <div style="display:flex;flex-direction:column;">
+              <span style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:18px;color:${resCol};">${resTitle}</span>
+              ${s.mode!=='timeattack'?`<span style="font-size:12px;color:#B9A9E0;">You <b style="color:var(--accent);">+${s.youGain}</b> · ${opp.name} <b style="color:#34E0C8;">+${s.oppGain}</b></span>`:''}
+            </div>
+            <div onclick="nextQ()" style="display:flex;align-items:center;gap:6px;background:var(--accent);color:#fff;padding:12px 22px;border-radius:999px;font-family:'Fredoka',sans-serif;font-weight:600;font-size:15px;cursor:pointer;box-shadow:0 8px 18px rgba(255,93,122,.4);">Next${ic('arrow_forward',19,'#fff')}</div>
+          </div>`
+        : `<div onclick="quitMatch()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid rgba(255,255,255,.2);color:#B9A9E0;padding:13px;border-radius:16px;font-family:'Fredoka',sans-serif;font-weight:500;font-size:15px;cursor:pointer;margin-top:4px;">${ic('close',19,'#B9A9E0')}Quit Match</div>`}
+    </div>
+  </div>
+  ${s.quitConfirm?`<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:999;">
+    <div style="background:#1C0F40;border-radius:24px;padding:28px;max-width:280px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.8);animation:popIn .3s ease-out;">
+      <div style="width:64px;height:64px;border-radius:50%;background:rgba(255,93,122,.14);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">${ic('info',36,'#FF5D7A')}</div>
+      <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:22px;color:#fff;margin-bottom:8px;">Quit Match?</div>
+      <div style="font-size:13px;color:#B9A9E0;margin-bottom:20px;">Your progress will not be saved.</div>
+      <div style="display:flex;gap:10px;">
+        <div onclick="cancelQuit()" style="flex:1;padding:12px;border-radius:14px;background:rgba(255,255,255,.08);color:#B9A9E0;font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;cursor:pointer;">Cancel</div>
+        <div onclick="confirmQuit()" style="flex:1;padding:12px;border-radius:14px;background:#FF5D7A;color:#fff;font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;cursor:pointer;">Quit</div>
+      </div>
+    </div>
+  </div>`:''}
+  </div>`;
+}
+
+function renderSummary(){
+  const opp=s.opp;
+  let won=s.youWon; let tied=s.youScore===s.oppScore;
+  if(s.mode==='survival'){ won=s.youLives>s.oppLives; tied=s.youLives===s.oppLives; }
+  else if(s.mode==='timeattack'){ won=s.youScore>s.oppScore; tied=s.youScore===s.oppScore; }
+  s.youWon=won;
+  const acc=Math.round((s.correctCount/QUESTIONS.length)*100);
+  const coins=won?120:tied?60:40;
+  const icon=won?'emoji_events':tied?'handshake':'sentiment_dissatisfied';
+  const bg=won?'linear-gradient(135deg,#FFD24A,#FF914D)':tied?'linear-gradient(135deg,#8B6CF0,#34E0C8)':'linear-gradient(135deg,#6A4ED0,#3A1E72)';
+  const glow=won?'rgba(255,210,74,.4)':tied?'rgba(139,108,240,.4)':'rgba(106,78,208,.3)';
+  const title=won?'Victory!':tied?"It's a Tie!":'Defeated';
+  const tCol=won?'#FFD24A':tied?'#34E0C8':'#C9BCEC';
+  const modeLabel=s.mode==='survival'?'Last player standing':(s.mode==='timeattack'?'Most correct answers':(s.mode==='handicap'?'Final score':''));
+  const sub=modeLabel?modeLabel:(won?`You outscored ${opp.name}!`:tied?'Evenly matched!':`${opp.name} won this round`);
+
+  return `<div style="display:flex;flex-direction:column;align-items:center;padding:20px 24px 22px;color:#fff;text-align:center;">
+    <div style="margin-top:14px;animation:popIn .5s ease-out;">
+      <div style="width:96px;height:96px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;box-shadow:0 14px 36px ${glow};">${ic(icon,52,'#fff')}</div>
+    </div>
+    <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:34px;margin-top:16px;color:${tCol};">${title}</div>
+    <div style="font-size:13.5px;color:#B9A9E0;margin-top:2px;">${sub}</div>
+
+    <div style="display:flex;align-items:center;justify-content:center;gap:18px;margin-top:24px;width:100%;">
+      <div style="flex:1;background:${won?'rgba(255,93,122,.14)':'rgba(255,255,255,.04)'};border:1.5px solid ${won?'var(--accent)':'rgba(255,255,255,.1)'};border-radius:22px;padding:16px 10px;display:flex;flex-direction:column;align-items:center;">
+        ${av(50,'#FF8FA8','#FF5D7A','M','#fff',2,'rgba(255,255,255,.85)')}
+        <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;margin-top:8px;">You</div>
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:28px;color:var(--accent);margin-top:2px;">${s.youScore}</div>
+      </div>
+      <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:18px;color:#FFC93C;">VS</div>
+      <div style="flex:1;background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.1);border-radius:22px;padding:16px 10px;display:flex;flex-direction:column;align-items:center;">
+        ${av(50,opp.c1,opp.c2,opp.initial,opp.tc)}
+        <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;margin-top:8px;">${opp.name}</div>
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:28px;color:#34E0C8;margin-top:2px;">${s.oppScore}</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:11px;margin-top:18px;width:100%;">
+      <div style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:13px 8px;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:20px;">${s.correctCount}/${QUESTIONS.length}</div>
+        <div style="font-size:10.5px;color:#B9A9E0;margin-top:2px;">Correct</div>
+      </div>
+      <div style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:13px 8px;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:20px;color:#34E0C8;">${acc}%</div>
+        <div style="font-size:10.5px;color:#B9A9E0;margin-top:2px;">Accuracy</div>
+      </div>
+      <div style="flex:1;background:rgba(255,201,60,.12);border:1px solid rgba(255,201,60,.25);border-radius:16px;padding:13px 8px;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:20px;color:#FFC93C;">+${coins}</div>
+        <div style="font-size:10.5px;color:#B9A9E0;margin-top:2px;">Coins</div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-height:20px;"></div>
+    <div onclick="onRematch()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:#fff;padding:16px;border-radius:18px;font-family:'Fredoka',sans-serif;font-weight:600;font-size:17px;cursor:pointer;box-shadow:0 12px 26px rgba(255,93,122,.4);margin-top:20px;">
+      ${ic('replay',21,'#fff')}Rematch
+    </div>
+    <div onclick="goHome()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid rgba(255,255,255,.22);color:#fff;padding:15px;border-radius:18px;font-family:'Fredoka',sans-serif;font-weight:500;font-size:16px;cursor:pointer;margin-top:11px;">Back to Home</div>
+  </div>`;
+}
+
+const LB_COLS=['#8B6CF0','#FF914D','#34E0C8','#FFC93C','#FF5D7A','#6AB7FF','#3FD98A','#FF8FD4','#FFB27A','#B79CFF'];
+const LB_COLS2=['#6A4ED0','#E76A2B','#1FB8A6','#E0A91F','#C13468','#4A8FD0','#1FB86A','#E06AB0','#E07A3A','#9070E0'];
+function renderLeaderboard(){
+  if(s.lbLoading) return `<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#fff;flex-direction:column;gap:16px;">
+    ${ic('hourglass_top',40,'#B9A9E0')}
+    <span style="font-family:'Fredoka',sans-serif;font-size:16px;color:#B9A9E0;">Loading…</span>
+  </div>`;
+  const data=s.lbData; const uid=s.user?.id;
+  const podium=data.slice(0,3); const rest=data.slice(3);
+  const podiumOrder=[1,0,2]; // indices: 2nd, 1st, 3rd from left to right
+  const heights=[66,94,52]; const fontSizes=[24,30,22]; // heights/fonts in display order (left, middle, right)
+  const displayCols=['#CBD3E8','#FFD24A','#E59B6B']; // silver, gold, bronze in display order
+  const avSizes=[54,64,54];
+  const podiumHTML=podiumOrder.map((origIdx,displayIdx)=>{
+    if(!podium[origIdx]) return '';
+    const u=podium[origIdx]; const isMe=u.id===uid;
+    const w=displayIdx===1?100:96; // middle is wider
+    const rank=origIdx+1; // 1st, 2nd, or 3rd
+    const col=displayCols[displayIdx]; // use display order for colors
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:7px;width:${w}px;">
+      ${displayIdx===1?ic('emoji_events',30,'#FFD24A','margin-bottom:-2px;'):''}
+      ${av(avSizes[displayIdx],LB_COLS[displayIdx],LB_COLS2[displayIdx],(u.display_name[0]).toUpperCase(),displayIdx===2?'#0C3B36':'#fff',3,col)}
+      <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:${displayIdx===1?14:13}px;">${isMe?'You':u.display_name}</div>
+      <div style="font-size:12px;color:${col};font-family:'Fredoka',sans-serif;font-weight:600;">${u.wins} W</div>
+      <div style="width:100%;height:${heights[displayIdx]}px;border-radius:14px 14px 0 0;background:linear-gradient(180deg,${col}44,${col}08);display:flex;align-items:flex-start;justify-content:center;padding-top:${displayIdx===1?12:10}px;font-family:'Fredoka',sans-serif;font-weight:700;font-size:${fontSizes[displayIdx]}px;color:${col};">${rank}</div>
+    </div>`;
+  }).filter(x=>x).join('');
+  const restHTML=rest.map((u,ri)=>{
+    const rank=ri+4; const isMe=u.id===uid; const ci=rank-1;
+    return `<div style="display:flex;align-items:center;gap:13px;padding:${isMe?11:9}px 14px;border-radius:16px;background:${isMe?'rgba(255,93,122,.16)':'rgba(255,255,255,.04)'};${isMe?'border:1.5px solid var(--accent);':''}">
+      <span style="width:20px;font-family:'Fredoka',sans-serif;font-weight:${isMe?700:600};font-size:15px;color:${isMe?'var(--accent)':'#B9A9E0'};text-align:center;">${rank}</span>
+      ${av(isMe?38:36,LB_COLS[ci%10],LB_COLS2[ci%10],(u.display_name[0]).toUpperCase(),'#fff',isMe?2:0,isMe?'rgba(255,255,255,.85)':'transparent')}
+      <div style="flex:1;"><div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14.5px;">${isMe?`You · ${u.display_name}`:u.display_name}</div><div style="font-size:11px;color:${isMe?'#FFC2CE':'#B9A9E0'};">Level ${lvl(u)} · ${u.wins} wins</div></div>
+      <span style="font-family:'Fredoka',sans-serif;font-weight:${isMe?700:600};font-size:14.5px;">${(u.wins*100+(u.xp||0)).toLocaleString()}</span>
+    </div>`;
+  }).join('');
+  return `<div style="display:flex;flex-direction:column;padding:8px 20px 16px;color:#fff;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">
+      <span style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:24px;">Leaderboard</span>
+      <div onclick="fetchLeaderboard()" style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.08);padding:6px 12px;border-radius:999px;cursor:pointer;">${ic('refresh',17,'#B9A9E0')}<span style="font-size:12px;color:#B9A9E0;font-family:'Fredoka',sans-serif;font-weight:500;">Refresh</span></div>
+    </div>
+    ${data.length===0?`<div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;margin-top:60px;color:#B9A9E0;font-family:'Fredoka',sans-serif;font-size:15px;">${ic('leaderboard',40,'#8676A8')}<span>No players yet — play a match!</span></div>`:`
+    <div style="display:flex;align-items:flex-end;justify-content:center;gap:9px;margin-top:24px;">${podiumHTML}</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">${restHTML}</div>`}
+  </div>`;
+}
+
+function renderProfile(){
+  const p=getP(); const l=lvl(p); const xp=xpInLvl(p); const xpPct=Math.round(xp/10);
+  const title=l<5?'Rookie':l<10?'Challenger':l<20?'Whiz':'Master';
+  return `<div style="display:flex;flex-direction:column;padding:14px 22px 16px;color:#fff;height:100%;">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">
+      ${av(84,'#FF8FA8','#FF5D7A',pInit(p),'#fff',3,'rgba(255,255,255,.85)')}
+      <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:21px;">${p.display_name}</div>
+      <div style="font-size:12.5px;color:#B9A9E0;">Level ${l} · Quiz ${title}</div>
+    </div>
+    <div style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#B9A9E0;margin-bottom:6px;"><span>Level ${l}</span><span>${xp} / 1,000 XP</span></div>
+      <div style="height:9px;border-radius:5px;background:rgba(255,255,255,.1);overflow:hidden;"><div style="width:${xpPct}%;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--accent),#FFC93C);"></div></div>
+    </div>
+    <div style="display:flex;gap:11px;margin-top:18px;">
+      <div style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:13px 8px;text-align:center;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:22px;">${p.wins}</div><div style="font-size:11px;color:#B9A9E0;margin-top:2px;">Wins</div>
+      </div>
+      <div style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:13px 8px;text-align:center;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:22px;color:#FF914D;display:flex;align-items:center;justify-content:center;gap:3px;">${p.streak}${ic('local_fire_department',18,'#FF914D')}</div>
+        <div style="font-size:11px;color:#B9A9E0;margin-top:2px;">Streak</div>
+      </div>
+      <div style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:13px 8px;text-align:center;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:22px;color:#34E0C8;">${acc(p)}%</div><div style="font-size:11px;color:#B9A9E0;margin-top:2px;">Accuracy</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:11px;margin-top:12px;">
+      <div style="flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:11px 8px;text-align:center;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:18px;color:#FFC93C;">${p.coins}</div><div style="font-size:10px;color:#B9A9E0;margin-top:1px;">Coins</div>
+      </div>
+      <div style="flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:11px 8px;text-align:center;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:18px;color:#FF6B6B;">${p.losses}</div><div style="font-size:10px;color:#B9A9E0;margin-top:1px;">Losses</div>
+      </div>
+      <div style="flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:11px 8px;text-align:center;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:18px;">${p.total_questions}</div><div style="font-size:10px;color:#B9A9E0;margin-top:1px;">Played</div>
+      </div>
+    </div>
+    ${s.user?`<div style="margin-top:20px;flex:1;">
+      <div style="font-size:12px;color:#8676A8;margin-bottom:4px;">Signed in as</div>
+      <div style="font-size:13px;color:#B9A9E0;">${s.user.email||''}</div>
+    </div>
+    <div onclick="doSignOut()" style="display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid rgba(255,107,107,.35);color:#FF8F8F;padding:13px;border-radius:16px;font-family:'Fredoka',sans-serif;font-weight:500;font-size:15px;cursor:pointer;margin-top:20px;">
+      ${ic('logout',19,'#FF8F8F')}Sign Out
+    </div>`:`<div style="margin-top:20px;flex:1;">
+      <div style="font-size:12px;color:#8676A8;">Playing as guest — progress won't be saved.</div>
+    </div>
+    <div onclick="s.screen='auth';render()" style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:#fff;padding:14px;border-radius:18px;font-family:'Fredoka',sans-serif;font-weight:600;font-size:16px;cursor:pointer;margin-top:20px;box-shadow:0 10px 24px rgba(255,93,122,.35);">
+      ${ic('login',19,'#fff')}Sign In / Create Account
+    </div>`}
+  </div>`;
+}
+
+sbInit();
+</script>
+</body>
+</html>
