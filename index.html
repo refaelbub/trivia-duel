@@ -436,7 +436,8 @@ async function startMatchmaking(mode,category){
         }catch(e){
           console.error('Queue delete error:',e);
         }
-        const seed=parseInt(s.user.id.slice(0,8),16)^parseInt(q.player_id.slice(0,8),16);
+        const timeSeed=Math.floor(Date.now()/10000);
+        const seed=(parseInt(s.user.id.slice(0,8),16)^parseInt(q.player_id.slice(0,8),16))^timeSeed;
         s.matchSeed=seed;
         setupQuestions(s.mode,seed);
         s.opp={...opp};
@@ -703,6 +704,9 @@ function updateTimer(){
 function updateDuelHeader(){
   const el=document.getElementById('oppCheck');
   if(el) el.style.display='flex';
+  if(s.phase==='waiting'){
+    render();
+  }
 }
 function choose(i){
   if(s.phase!=='answering')return;
