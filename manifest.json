@@ -5,7 +5,8 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
   "theme_color": "#FF5D7A",
   "background_color": "#0A0420",
   "icons": [
@@ -22,7 +23,7 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["games", "productivity"],
+  "categories": ["games"],
   "screenshots": [
     {
       "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 540 720'><rect fill='%23241046' width='540' height='720'/><text x='270' y='360' font-size='60' font-weight='bold' fill='%23FF5D7A' text-anchor='middle'>Trivia Duel</text></svg>",
