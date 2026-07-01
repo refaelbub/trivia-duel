@@ -325,6 +325,16 @@ async function startMatchmaking(mode,category){
   s.matchCategory=category;
   s.category=category;
   s.mode=mode;
+
+  if(mode==='timeattack'){
+    QUESTIONS=shuffle(QUESTION_BANK).slice(0,100);
+  } else if(mode==='handicap' && s.lastWinner){
+    const isYouChamp=s.lastWinner==='you';
+    QUESTIONS=shuffle(QUESTION_BANK.filter(q=>!q.difficulty||q.difficulty===(isYouChamp?'hard':'easy'))).slice(0,5);
+  } else {
+    QUESTIONS=shuffle(QUESTION_BANK).slice(0,5);
+  }
+
   render();
 
   const {error}=await sb.from('matchmaking_queue').insert({
@@ -614,14 +624,6 @@ function beginTimeAttack(){
 }
 function beginMatch(direct){
   if(s.mode==='survival'){ s.youLives=3; s.oppLives=3; }
-  if(s.mode==='timeattack'){
-    QUESTIONS = shuffle(QUESTION_BANK).slice(0,100);
-  } else if(s.mode==='handicap' && s.lastWinner){
-    const isYouChamp=s.lastWinner==='you';
-    QUESTIONS = shuffle(QUESTION_BANK.filter(q=>!q.difficulty || q.difficulty===(isYouChamp?'hard':'easy'))).slice(0,5);
-  } else {
-    QUESTIONS = shuffle(QUESTION_BANK).slice(0,5);
-  }
   clearTimers(); s.correctCount=0; s.directChallenge=direct;
   Object.assign(s,{youScore:0,oppScore:0,qIndex:0,pu:{fifty:1,freeze:1,double:1},puUsed:{},doubleActive:false,oppFrozen:false,hidden:[],screen:'matching',timeAttackRemain:60});
   render();
@@ -1194,7 +1196,7 @@ function renderDuel(){
           <div id="oppCheck" style="position:absolute;right:-3px;bottom:-3px;width:20px;height:20px;border-radius:50%;background:#34E0C8;border:2px solid #1C0F40;display:${s.oppAnswered&&!s.oppFrozen?'flex':'none'};align-items:center;justify-content:center;">${ic('check',13,'#0C3B36')}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-end;">
-          <span style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;">${opp.name}</span>
+          <span style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;">${opp.display_name||opp.name||'Opponent'}</span>
           <span style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:13px;color:#34E0C8;">${oppScoreText}</span>
         </div>
       </div>
