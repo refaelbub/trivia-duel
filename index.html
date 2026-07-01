@@ -285,7 +285,8 @@ async function doSignIn(){
 async function doGoogleAuth(){
   if(!sb){s.authError='Connection unavailable. Check your network.';render();return;}
   s.authLoading=true; s.authError=''; render();
-  const {data,error}=await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});
+  const redirectUrl=window.location.origin + (window.location.origin.includes('localhost')?'/trivia-duel.html':'/');
+  const {data,error}=await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:redirectUrl}});
   if(error){ s.authLoading=false; s.authError=error.message; render(); }
 }
 
