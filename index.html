@@ -660,13 +660,18 @@ function toCountdown(){
 function startQuestion(i){
   clearTimers();
   const q=QUESTIONS[i];
-  s.oppWill=Math.random()<0.85;
+  const seed=s.matchSeed^i;
+  const rng1=((seed*9301+49297)%233280)/233280;
+  const rng2=(((seed+1)*9301+49297)%233280)/233280;
+  const rng3=(((seed+2)*9301+49297)%233280)/233280;
+  s.oppWill=rng1<0.85;
   const oppTimeBudget=s.mode==='timeattack'?2.5:QT;
-  s.oppTime=s.oppWill ? +(1.4+Math.random()*(oppTimeBudget-1.5)).toFixed(1) : null;
-  s.oppRight=Math.random()<0.6;
-  s.oppChoice=s.oppRight ? q.correct : (()=>{let w;do{w=Math.floor(Math.random()*4);}while(w===q.correct);return w;})();
+  s.oppTime=s.oppWill ? +(1.4+rng2*(oppTimeBudget-1.5)).toFixed(1) : null;
+  s.oppRight=rng3<0.6;
+  s.oppChoice=s.oppRight ? q.correct : (()=>{let w;do{w=Math.floor(rng3*4);}while(w===q.correct);return w;})();
+  s.oppAnswerTime=s.oppWill ? s.oppTime : null;
   const questionTimer=s.mode==='timeattack'?s.timeAttackRemain:QT;
-  Object.assign(s,{screen:'duel',phase:'answering',qIndex:i,timeLeft:questionTimer,youAnswer:null,oppAnswered:false,youGain:0,oppGain:0,puUsed:{},doubleActive:false,oppFrozen:false,hidden:[]});
+  Object.assign(s,{screen:'duel',phase:'answering',qIndex:i,timeLeft:questionTimer,youAnswer:null,oppAnswer:null,oppAnswered:false,youGain:0,oppGain:0,puUsed:{},doubleActive:false,oppFrozen:false,hidden:[]});
   render();
   qTimer=setInterval(tick,100);
 }
@@ -674,7 +679,11 @@ function tick(){
   s.timeLeft=+(s.timeLeft-0.1).toFixed(2);
   if(s.mode==='timeattack') s.timeAttackRemain=Math.max(0, s.timeAttackRemain-0.1);
   const elapsed=(s.mode==='timeattack'?QT:QT)-s.timeLeft;
-  if(!s.oppAnswered && !s.oppFrozen && s.oppTime!=null && elapsed>=s.oppTime){s.oppAnswered=true; updateDuelHeader();}
+  if(!s.oppAnswered && !s.oppFrozen && s.oppTime!=null && elapsed>=s.oppTime){
+    s.oppAnswered=true;
+    s.oppAnswer=s.oppChoice;
+    updateDuelHeader();
+  }
 
   if(s.phase==='waiting'){
     if(s.timeLeft<=0){
@@ -1331,7 +1340,8 @@ function renderSummary(){
   const title=won?'Victory!':tied?"It's a Tie!":'Defeated';
   const tCol=won?'#FFD24A':tied?'#34E0C8':'#C9BCEC';
   const modeLabel=s.mode==='survival'?'Last player standing':(s.mode==='timeattack'?'Most correct answers':(s.mode==='handicap'?'Final score':''));
-  const sub=modeLabel?modeLabel:(won?`You outscored ${opp.name}!`:tied?'Evenly matched!':`${opp.name} won this round`);
+  const oppDisplayName=opp.display_name||opp.name||'Opponent';
+  const sub=modeLabel?modeLabel:(won?`You outscored ${oppDisplayName}!`:tied?'Evenly matched!':`${oppDisplayName} won this round`);
 
   return `<div style="display:flex;flex-direction:column;align-items:center;padding:20px 24px 22px;color:#fff;text-align:center;">
     <div style="margin-top:14px;animation:popIn .5s ease-out;">
@@ -1342,14 +1352,14 @@ function renderSummary(){
 
     <div style="display:flex;align-items:center;justify-content:center;gap:18px;margin-top:24px;width:100%;">
       <div style="flex:1;background:${won?'rgba(255,93,122,.14)':'rgba(255,255,255,.04)'};border:1.5px solid ${won?'var(--accent)':'rgba(255,255,255,.1)'};border-radius:22px;padding:16px 10px;display:flex;flex-direction:column;align-items:center;">
-        ${av(50,'#FF8FA8','#FF5D7A','M','#fff',2,'rgba(255,255,255,.85)')}
+        ${av(50,'#FF8FA8','#FF5D7A',pInit(s.profile),'#fff',2,'rgba(255,255,255,.85)')}
         <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;margin-top:8px;">You</div>
         <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:28px;color:var(--accent);margin-top:2px;">${s.youScore}</div>
       </div>
       <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:18px;color:#FFC93C;">VS</div>
       <div style="flex:1;background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.1);border-radius:22px;padding:16px 10px;display:flex;flex-direction:column;align-items:center;">
         ${av(50,opp.c1,opp.c2,opp.initial,opp.tc)}
-        <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;margin-top:8px;">${opp.name}</div>
+        <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;margin-top:8px;">${oppDisplayName}</div>
         <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:28px;color:#34E0C8;margin-top:2px;">${s.oppScore}</div>
       </div>
     </div>
