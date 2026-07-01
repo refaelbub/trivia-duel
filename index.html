@@ -214,6 +214,45 @@ const QUICK_OPP = {name:'Alex', initial:'A', c1:'#7BE8DC', c2:'#34E0C8', tc:'#0C
 const QT = 12;
 
 // =========== SUPABASE ===========
+/*
+SETUP: Run in Supabase SQL Editor before deploying:
+
+-- Matchmaking queue table
+CREATE TABLE matchmaking_queue (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  mode TEXT NOT NULL,
+  category TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE matchmaking_queue ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can insert their own queue entry" ON matchmaking_queue
+  FOR INSERT WITH CHECK (player_id = auth.uid());
+CREATE POLICY "Users can view queue" ON matchmaking_queue
+  FOR SELECT USING (true);
+CREATE POLICY "Users can delete their own queue entry" ON matchmaking_queue
+  FOR DELETE USING (player_id = auth.uid());
+
+-- Friend invites table
+CREATE TABLE friend_invites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  from_player_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  to_player_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  code TEXT NOT NULL UNIQUE,
+  mode TEXT NOT NULL DEFAULT 'classic',
+  category TEXT NOT NULL DEFAULT 'General',
+  expires_at TIMESTAMPTZ DEFAULT (now() + interval '5 minutes'),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE friend_invites ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view their invites" ON friend_invites
+  FOR SELECT USING (from_player_id = auth.uid() OR to_player_id = auth.uid());
+CREATE POLICY "Users can create invites" ON friend_invites
+  FOR INSERT WITH CHECK (from_player_id = auth.uid());
+*/
+
 const SB_URL = 'https://itotpmqbhbgsmnnjovia.supabase.co';
 const SB_KEY = 'sb_publishable_vSnQ_dRlJBuhaOXOd9LiLw_poorec0c';
 let sb = null;
@@ -251,6 +290,122 @@ function seasonBadge(p){
   if(score>=5000) return{badge:'emoji_events',col:'#C0C0C0',label:'Silver'};
   return{badge:'star_border',col:'#B9A9E0',label:'Bronze'};
 }
+
+const BOT_NAMES=['Alex','Jordan','Casey','Morgan','Riley','Taylor','Quinn','Cameron','Blake','Dakota','Avery','Phoenix'];
+const BOT_COLORS=[['#B79CFF','#8B6CF0'],['#FFB27A','#FF914D'],['#7BE8DC','#34E0C8'],['#FFE07A','#FFC93C'],['#FF9FB2','#FF5D7A'],['#8FD9FF','#5BA8E0']];
+
+function generateBot(playerProfile){
+  const playerSeason=seasonBadge(playerProfile);
+  const botLeague=playerSeason.label;
+  const playerAcc=acc(playerProfile);
+  const botAcc=Math.max(50,Math.min(95,playerAcc+Math.random()*20-10));
+  const colors=BOT_COLORS[Math.floor(Math.random()*BOT_COLORS.length)];
+  return{
+    id:'bot_'+Math.random().toString(36).substr(2,9),
+    name:BOT_NAMES[Math.floor(Math.random()*BOT_NAMES.length)],
+    initial:BOT_NAMES[Math.floor(Math.random()*BOT_NAMES.length)][0],
+    c1:colors[0],c2:colors[1],
+    tc:'#1A0A40',
+    lvl:lvl(playerProfile),
+    isBot:true,
+    accuracy:botAcc,
+    xp:0,
+    wins:0,
+    losses:0,
+    streak:0,
+    total_correct:0,
+    total_questions:0
+  };
+}
+
+async function findMatch(mode,category){
+  if(!sb||!s.user) return null;
+  const p=s.profile;
+  const pSeason=seasonBadge(p);
+  const pAcc=acc(p);
+
+  const {data:queue}=await sb.from('matchmaking_queue')
+    .select('player_id')
+    .eq('mode',mode)
+    .eq('category',category)
+    .order('created_at');
+
+  if(!queue||queue.length<2) return null;
+
+  for(const q of queue){
+    if(q.player_id===s.user.id) continue;
+    const {data:opp}=await sb.from('profiles').select('*').eq('id',q.player_id).single();
+    if(!opp) continue;
+
+    const oppSeason=seasonBadge(opp);
+    const oppAcc=acc(opp);
+
+    if(oppSeason.label===pSeason.label){
+      await sb.from('matchmaking_queue').delete().eq('player_id',s.user.id);
+      await sb.from('matchmaking_queue').delete().eq('player_id',q.player_id);
+      return opp;
+    }
+  }
+
+  return null;
+}
+
+async function startMatchmaking(mode,category){
+  if(!sb||!s.user) return;
+  s.screen='matching';
+  s.matchCategory=category;
+  s.category=category;
+  s.mode=mode;
+  render();
+
+  const {error}=await sb.from('matchmaking_queue').insert({
+    player_id:s.user.id,
+    mode:mode,
+    category:category
+  });
+
+  if(error){console.error('Matchmaking error:',error);return;}
+
+  let matchFound=false;
+  const timeout=setTimeout(()=>{
+    if(!matchFound){
+      sb.from('matchmaking_queue').delete().eq('player_id',s.user.id).then(()=>{
+        s.opp=generateBot(s.profile);
+        s.directChallenge=false;
+        beginMatch(false);
+      });
+    }
+  },8000);
+
+  const channel=sb.channel(`match:${s.user.id}`);
+  channel.on('broadcast',{event:'match_found'},(payload)=>{
+    if(payload.opp_id===s.user.id){
+      matchFound=true;
+      clearTimeout(timeout);
+      sb.removeAllChannels();
+      s.opp={...payload.opp};
+      s.directChallenge=false;
+      beginMatch(false);
+    }
+  }).subscribe();
+
+  for(let i=0;i<80;i++){
+    if(matchFound) break;
+    const found=await findMatch(mode,category);
+    if(found){
+      matchFound=true;
+      clearTimeout(timeout);
+      sb.removeAllChannels();
+      s.opp={...found};
+      s.directChallenge=false;
+      await sb.channel(`match:${found.id}`).send('broadcast',{event:'match_found',opp_id:found.id,opp:{...s.profile}});
+      beginMatch(false);
+      return;
+    }
+    await new Promise(r=>setTimeout(r,100));
+  }
+}
+
 const TIPS=[
   {text:'The shortest war in history lasted only 38 minutes (1896, UK vs Zanzibar)',icon:'history_edu'},
   {text:'Honey never spoils and can last thousands of years if stored properly',icon:'lunch_dining'},
@@ -420,28 +575,56 @@ function goMode(){clearTimers();s.screen='mode';render();}
 function chooseMode(m){s.mode=m;if(m==='timeattack'){beginTimeAttack();}else{s.screen='category';render();}}
 function goCategory(){clearTimers();s.screen='category';render();}
 function onSurprise(){chooseCategory(CATS[Math.floor(Math.random()*CATS.length)].name);}
-function chooseCategory(cat){s.category=cat;s.matchCategory=cat;s.opp={...QUICK_OPP};beginMatch(false);}
-function challengeFriendIdx(i){const f=FRIENDS[i];if(!f.online)return;s.opp={...f};s.category='General';s.matchCategory='General';beginMatch(true);}
+function chooseCategory(cat){startMatchmaking(s.mode||'classic',cat);}
+
+async function challengeFriendIdx(i){
+  const f=FRIENDS[i];
+  if(!f.online||!sb||!s.user) return;
+  s.screen='matching';
+  render();
+  const code=Math.random().toString(36).substring(2,8).toUpperCase();
+  const {error}=await sb.from('friend_invites').insert({
+    from_player_id:s.user.id,
+    to_player_id:f.id||'friend_'+i,
+    code:code,
+    mode:s.mode||'classic',
+    category:'General'
+  });
+  if(error){console.error('Invite error:',error);return;}
+  const timeout=setTimeout(()=>{
+    sb.from('friend_invites').delete().eq('code',code);
+    s.opp=generateBot(s.profile);
+    beginMatch(false);
+  },30000);
+  s.friendInviteCode=code;
+  s.friendInviteTimer=timeout;
+}
+
+function acceptFriendInvite(code,fromProfile){
+  clearTimeout(s.friendInviteTimer);
+  s.opp={...fromProfile};
+  s.category='General';
+  s.matchCategory='General';
+  beginMatch(true);
+}
 
 // Game
 function beginTimeAttack(){
-  s.matchCategory='General'; s.category='General'; s.opp={...QUICK_OPP};
-  QUESTIONS = shuffle(QUESTION_BANK).slice(0,100);
-  clearTimers(); s.correctCount=0; s.directChallenge=false;
-  Object.assign(s,{youScore:0,oppScore:0,qIndex:0,pu:{fifty:1,freeze:1,double:1},puUsed:{},doubleActive:false,oppFrozen:false,hidden:[],screen:'matching',timeAttackRemain:60});
-  render();
-  matchTimer=setTimeout(toCountdown, 2300);
+  s.mode='timeattack';
+  startMatchmaking('timeattack','General');
 }
 function beginMatch(direct){
   if(s.mode==='survival'){ s.youLives=3; s.oppLives=3; }
-  if(s.mode==='handicap' && s.lastWinner){
+  if(s.mode==='timeattack'){
+    QUESTIONS = shuffle(QUESTION_BANK).slice(0,100);
+  } else if(s.mode==='handicap' && s.lastWinner){
     const isYouChamp=s.lastWinner==='you';
     QUESTIONS = shuffle(QUESTION_BANK.filter(q=>!q.difficulty || q.difficulty===(isYouChamp?'hard':'easy'))).slice(0,5);
   } else {
     QUESTIONS = shuffle(QUESTION_BANK).slice(0,5);
   }
   clearTimers(); s.correctCount=0; s.directChallenge=direct;
-  Object.assign(s,{youScore:0,oppScore:0,qIndex:0,pu:{fifty:1,freeze:1,double:1},puUsed:{},doubleActive:false,oppFrozen:false,hidden:[],screen:'matching'});
+  Object.assign(s,{youScore:0,oppScore:0,qIndex:0,pu:{fifty:1,freeze:1,double:1},puUsed:{},doubleActive:false,oppFrozen:false,hidden:[],screen:'matching',timeAttackRemain:60});
   render();
   matchTimer=setTimeout(toCountdown, direct?1700:2300);
 }
