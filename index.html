@@ -31,7 +31,7 @@ body { margin: 0; background: radial-gradient(130% 100% at 50% 0%, #241046 0%, #
 .content { flex:1; position:relative; overflow:hidden; display:flex; flex-direction:column; min-height:0; }
 .screen { height:100%; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
 .screen::-webkit-scrollbar { display:none; }
-.navbar { flex-shrink:0; display:flex; justify-content:space-around; align-items:flex-end; padding:11px 18px 8px; background:rgba(11,6,30,.72); border-top:1px solid rgba(255,255,255,.07); }
+.navbar { flex-shrink:0; display:flex; justify-content:space-around; align-items:flex-end; padding:11px 18px 8px; background:rgba(11,6,30,.95); border-top:1px solid rgba(255,255,255,.07); position:sticky; bottom:0; z-index:100; backdrop-filter:blur(10px); }
 .hi { height:26px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .ms { font-family:'Material Symbols Rounded'; font-variation-settings:'FILL' 1; display:inline-flex; align-items:center; }
 </style>
@@ -244,6 +244,19 @@ function seasonBadge(p){
   if(score>=20000) return{badge:'military_tech',col:'#34E0C8',label:'Gold'};
   if(score>=5000) return{badge:'emoji_events',col:'#FF914D',label:'Silver'};
   return{badge:'star_border',col:'#B9A9E0',label:'Bronze'};
+}
+function getRandomTip(){
+  const tips=[
+    {text:'The shortest war in history lasted only 38 minutes (1896, UK vs Zanzibar)',icon:'history_edu'},
+    {text:'Honey never spoils and can last thousands of years if stored properly',icon:'lunch_dining'},
+    {text:'A group of flamingos is called a "flamboyance"',icon:'pets'},
+    {text:'The Great Wall of China is not visible from space with naked eye',icon:'public'},
+    {text:'Octopuses have three hearts, not one',icon:'favorite'},
+    {text:'Bananas are berries, but strawberries are not',icon:'eco'},
+    {text:'Venus is hotter than Mercury despite being farther from the Sun',icon:'wb_sunny'},
+    {text:'Lightning is seen before thunder because light travels faster than sound',icon:'science'},
+  ];
+  return tips[Math.floor(Math.random()*tips.length)];
 }
 
 async function sbInit(){
@@ -574,7 +587,12 @@ function renderAuth(){
 
 function renderHome(){
   const p=getP();const l=lvl(p);const sb_info=seasonBadge(p);const canClaim=canClaimDailyBonus();
-  return `<div style="display:flex;flex-direction:column;padding:6px 22px 16px;color:#fff;">
+  const tip=getRandomTip();
+  const nextBadgeScore=(sb_info.label==='Bronze'?5000:sb_info.label==='Silver'?20000:sb_info.label==='Gold'?50000:999999);
+  const currentScore=p.wins*100+(p.xp||0);
+  const badgePct=Math.round((currentScore/nextBadgeScore)*100);
+  const winRate=p.total_questions>0?Math.round(p.wins/(p.total_questions/5)*100):0;
+  return `<div style="display:flex;flex-direction:column;padding:6px 22px 100px;color:#fff;">
     <div style="display:flex;align-items:center;gap:13px;margin-top:6px;">
       <div style="position:relative;">
         ${av(52,'#FF8FA8','#FF5D7A',pInit(p),'#fff',2.5,'rgba(255,255,255,.85)')}
@@ -647,6 +665,44 @@ function renderHome(){
       <div style="flex:1;"><div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:15px;">Daily Bonus Claimed</div><div style="font-size:12px;color:#B9A9E0;">Return tomorrow for more</div></div>
       ${ic('check',24,'#B9A9E0')}
     </div>`}
+
+    <!-- Seasonal Badge Progress -->
+    <div style="margin-top:18px;background:linear-gradient(135deg,${sb_info.col}22,${sb_info.col}08);border:1px solid ${sb_info.col}44;border-radius:20px;padding:15px;display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${ic(sb_info.badge,22,sb_info.col)}
+          <div><div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:14px;">${sb_info.label} Tier</div><div style="font-size:11px;color:#B9A9E0;">${currentScore.toLocaleString()} / ${nextBadgeScore.toLocaleString()} pts</div></div>
+        </div>
+      </div>
+      <div style="height:6px;border-radius:3px;background:rgba(255,255,255,.1);overflow:hidden;"><div style="width:${badgePct}%;height:100%;background:${sb_info.col};border-radius:3px;"></div></div>
+    </div>
+
+    <!-- Daily Trivia Tip -->
+    <div style="margin-top:14px;background:rgba(139,108,240,.1);border:1px solid rgba(139,108,240,.25);border-radius:18px;padding:14px;display:flex;align-items:flex-start;gap:12px;">
+      <div style="font-size:20px;flex-shrink:0;">${ic(tip.icon,20,'#8B6CF0')}</div>
+      <div style="flex:1;"><div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:13px;color:#B9A9E0;">Did you know?</div><div style="font-size:12px;line-height:1.4;margin-top:4px;">${tip.text}</div></div>
+    </div>
+
+    <!-- Win Rate & Quick Stats -->
+    <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:12px;text-align:center;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:20px;color:#FF5D7A;">${winRate}%</div>
+        <div style="font-size:10px;color:#B9A9E0;margin-top:4px;">Win Rate</div>
+      </div>
+      <div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:12px;text-align:center;">
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:20px;color:#34E0C8;">${(p.total_questions||0).toLocaleString()}</div>
+        <div style="font-size:10px;color:#B9A9E0;margin-top:4px;">Questions</div>
+      </div>
+    </div>
+
+    <!-- Animated Background Element -->
+    <div style="margin-top:20px;height:60px;border-radius:20px;background:linear-gradient(135deg,rgba(255,93,122,.15),rgba(139,108,240,.15));border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;gap:10px;overflow:hidden;">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#FF5D7A;animation:pulse 1.5s infinite;"></div>
+        <div style="font-size:13px;font-family:'Fredoka',sans-serif;color:#B9A9E0;">Live players online</div>
+        <div style="font-family:'Fredoka',sans-serif;font-weight:700;color:#FF5D7A;animation:pulse 1.5s infinite 0.3s;">●</div>
+      </div>
+    </div>
   </div>`;
 }
 
