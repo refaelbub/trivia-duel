@@ -584,8 +584,8 @@ const s = {
   tipIndex:0,
 };
 
-let matchTimer,cdTimer,qTimer,revealTimer,chooseTimer,tipTimer;
-function clearTimers(){ clearTimeout(matchTimer);clearInterval(cdTimer);clearInterval(qTimer);clearTimeout(revealTimer);clearTimeout(chooseTimer);clearInterval(tipTimer); }
+let matchTimer,cdTimer,qTimer,revealTimer,chooseTimer,tipTimer,waitTimer;
+function clearTimers(){ clearTimeout(matchTimer);clearInterval(cdTimer);clearInterval(qTimer);clearTimeout(revealTimer);clearTimeout(chooseTimer);clearInterval(tipTimer);clearTimeout(waitTimer); }
 function startTipCarousel(){
   tipTimer=setInterval(()=>{
     s.tipIndex=(s.tipIndex+1)%TIPS.length;
@@ -677,13 +677,15 @@ function tick(){
   if(!s.oppAnswered && !s.oppFrozen && s.oppTime!=null && elapsed>=s.oppTime){s.oppAnswered=true; updateDuelHeader();}
 
   if(s.phase==='waiting'){
-    if(s.oppAnswered || s.timeLeft<=0){
+    if(s.timeLeft<=0){
       clearInterval(qTimer);
-      reveal(s.timeLeft<=0);
+      clearTimeout(waitTimer);
+      reveal(true);
       return;
     }
   } else if(s.timeLeft<=0 || (s.mode==='timeattack' && s.timeAttackRemain<=0)){
     clearInterval(qTimer);
+    clearTimeout(waitTimer);
     s.timeLeft=0;
     reveal(true);
     return;
@@ -714,7 +716,13 @@ function choose(i){
   s.youAnswer=i;
   s.youAnswerTime=QT-s.timeLeft;
   s.phase='waiting';
+  s.waitStartTime=Date.now();
   render();
+  waitTimer=setTimeout(()=>{
+    if(s.phase==='waiting'){
+      reveal(false);
+    }
+  },5000);
 }
 
 function reveal(timedOut){
