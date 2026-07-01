@@ -302,155 +302,69 @@ function seasonBadge(p){
   return{badge:'star_border',col:'#B9A9E0',label:'Bronze'};
 }
 
-const BOT_NAMES=['Alex','Jordan','Casey','Morgan','Riley','Taylor','Quinn','Cameron','Blake','Dakota','Avery','Phoenix'];
-const BOT_COLORS=[['#B79CFF','#8B6CF0'],['#FFB27A','#FF914D'],['#7BE8DC','#34E0C8'],['#FFE07A','#FFC93C'],['#FF9FB2','#FF5D7A'],['#8FD9FF','#5BA8E0']];
+// =========== SOLO MODE ===========
 
-function generateBot(playerProfile){
-  const playerSeason=seasonBadge(playerProfile);
-  const botLeague=playerSeason.label;
-  const playerAcc=acc(playerProfile);
-  const botAcc=Math.max(50,Math.min(95,playerAcc+Math.random()*20-10));
-  const colors=BOT_COLORS[Math.floor(Math.random()*BOT_COLORS.length)];
-  return{
-    id:'bot_'+Math.random().toString(36).substr(2,9),
-    name:BOT_NAMES[Math.floor(Math.random()*BOT_NAMES.length)],
-    initial:BOT_NAMES[Math.floor(Math.random()*BOT_NAMES.length)][0],
-    c1:colors[0],c2:colors[1],
-    tc:'#1A0A40',
-    lvl:lvl(playerProfile),
-    isBot:true,
-    accuracy:botAcc,
-    xp:0,
-    wins:0,
-    losses:0,
-    streak:0,
-    total_correct:0,
-    total_questions:0
-  };
-}
-
-function setupQuestions(mode,seed){
+function setupQuestions(mode){
+  const seed=Date.now();
+  s.matchSeed=seed;
   if(mode==='timeattack'){
     QUESTIONS=seededShuffle(QUESTION_BANK,seed).slice(0,100);
-  } else if(mode==='handicap' && s.lastWinner){
-    const isYouChamp=s.lastWinner==='you';
-    QUESTIONS=seededShuffle(QUESTION_BANK.filter(q=>!q.difficulty||q.difficulty===(isYouChamp?'hard':'easy')),seed).slice(0,5);
   } else {
     QUESTIONS=seededShuffle(QUESTION_BANK,seed).slice(0,5);
   }
 }
 
-async function startMatchmaking(mode,category){
-  if(!sb||!s.user){console.error('Matchmaking init failed: sb or user missing');return;}
-  console.log('🔍 Matchmaking started:',mode,category);
-  s.screen='matching';
+function startSoloMatch(mode,category){
+  s.mode=mode;
   s.matchCategory=category;
   s.category=category;
-  s.mode=mode;
-
+  s.screen='matching';
+  setupQuestions(mode);
   render();
+  matchTimer=setTimeout(()=>beginMatch(false),1800);
+}
 
-  const {error}=await sb.from('matchmaking_queue').insert({
+async function saveMatchResult(){
+  if(!sb||!s.user) return null;
+  const questionIds=QUESTIONS.map((_,i)=>i);
+  const payload={
     player_id:s.user.id,
-    mode:mode,
-    category:category
-  });
-
-  if(error){
-    console.error('❌ Queue insert error:',error);
-    s.opp=generateBot(s.profile);
-    beginMatch(false);
-    return;
-  }
-  console.log('✅ Added to queue');
-
-  let matchFound=false;
-  const startTime=Date.now();
-
-  const pollMatch=async()=>{
-    if(matchFound) return;
-    const elapsed=Date.now()-startTime;
-
-    if(elapsed>8000){
-      console.log('⏱ 8s timeout - spawning bot');
-      matchFound=true;
-      try{
-        await sb.from('matchmaking_queue').delete().eq('player_id',s.user.id);
-      }catch(e){
-        console.error('Queue delete error:',e);
-      }
-      const seed=Math.floor(Date.now()/1000);
-      s.matchSeed=seed;
-      setupQuestions(s.mode,seed);
-      s.opp=generateBot(s.profile);
-      s.directChallenge=false;
-      beginMatch(false);
-      return;
-    }
-
-    let queue=null;
-    try{
-      const res=await sb.from('matchmaking_queue')
-        .select('player_id')
-        .eq('mode',mode)
-        .eq('category',category)
-        .order('created_at');
-      queue=res.data;
-      if(res.error) console.error('Queue fetch error:',res.error);
-    }catch(e){
-      console.error('Queue fetch exception:',e);
-    }
-
-    console.log('Queue size:',queue?.length||0);
-
-    if(!queue||queue.length<2){
-      setTimeout(pollMatch,300);
-      return;
-    }
-
-    for(const q of queue){
-      if(q.player_id===s.user.id) continue;
-
-      let opp=null;
-      try{
-        const res=await sb.from('profiles').select('*').eq('id',q.player_id).single();
-        opp=res.data;
-        if(res.error){console.log('Profile fetch error for',q.player_id,':',res.error);continue;}
-      }catch(e){
-        console.log('Profile fetch exception for',q.player_id,':',e);
-        continue;
-      }
-      if(!opp){console.log('No profile for',q.player_id);continue;}
-
-      const pSeason=seasonBadge(s.profile);
-      const oppSeason=seasonBadge(opp);
-
-      console.log('Checking match:',pSeason.label,'vs',oppSeason.label);
-
-      if(oppSeason.label===pSeason.label){
-        console.log('✨ MATCH FOUND:',opp.display_name);
-        matchFound=true;
-        try{
-          await sb.from('matchmaking_queue').delete().eq('player_id',s.user.id);
-          await sb.from('matchmaking_queue').delete().eq('player_id',q.player_id);
-        }catch(e){
-          console.error('Queue delete error:',e);
-        }
-        const timeSeed=Math.floor(Date.now()/10000);
-        const seed=(parseInt(s.user.id.slice(0,8),16)^parseInt(q.player_id.slice(0,8),16))^timeSeed;
-        s.matchSeed=seed;
-        setupQuestions(s.mode,seed);
-        s.opp={...opp};
-        s.directChallenge=false;
-        beginMatch(false);
-        return;
-      }
-    }
-
-    setTimeout(pollMatch,300);
+    score:s.youScore,
+    correct:s.correctCount,
+    total:QUESTIONS.length,
+    mode:s.mode,
+    category:s.matchCategory,
+    seed:s.matchSeed,
+    question_ids:JSON.stringify(questionIds),
+    played_at:new Date().toISOString()
   };
+  const {data,error}=await sb.from('solo_matches').insert(payload).select().single();
+  if(error){console.error('Save match error:',error);return null;}
+  return data;
+}
 
-  pollMatch();
+async function sendChallenge(matchId){
+  if(!sb||!s.user) return null;
+  const code=Math.random().toString(36).substring(2,8).toUpperCase();
+  const {data,error}=await sb.from('challenge_invites').insert({
+    from_player_id:s.user.id,
+    match_id:matchId,
+    code:code,
+    expires_at:new Date(Date.now()+7*24*60*60*1000).toISOString()
+  }).select().single();
+  if(error){console.error('Send challenge error:',error);return null;}
+  return code;
+}
+
+async function acceptChallenge(code){
+  if(!sb) return null;
+  const {data,error}=await sb.from('challenge_invites')
+    .select('*, solo_matches(*)')
+    .eq('code',code.toUpperCase())
+    .gt('expires_at',new Date().toISOString())
+    .single();
+  if(error||!data){console.error('Invalid or expired challenge code');return null;}
+  return data;
 }
 
 const TIPS=[
@@ -622,26 +536,11 @@ function goMode(){clearTimers();s.screen='mode';render();}
 function chooseMode(m){s.mode=m;if(m==='timeattack'){beginTimeAttack();}else{s.screen='category';render();}}
 function goCategory(){clearTimers();s.screen='category';render();}
 function onSurprise(){chooseCategory(CATS[Math.floor(Math.random()*CATS.length)].name);}
-function chooseCategory(cat){startMatchmaking(s.mode||'classic',cat);}
-
-async function challengeFriendIdx(i){
-  const f=FRIENDS[i];
-  if(!f.online||!sb||!s.user) return;
-  s.screen='matching';
-  s.mode=s.mode||'classic';
-  s.category='General';
-  s.matchCategory='General';
-  render();
-
-  s.opp=generateBot(s.profile);
-  setTimeout(()=>beginMatch(false),1500);
-}
+function chooseCategory(cat){startSoloMatch(s.mode||'classic',cat);}
+function challengeFriendIdx(i){const f=FRIENDS[i];if(!f.online)return;startSoloMatch('classic','General');}
 
 // Game
-function beginTimeAttack(){
-  s.mode='timeattack';
-  startMatchmaking('timeattack','General');
-}
+function beginTimeAttack(){startSoloMatch('timeattack','General');}
 function beginMatch(direct){
   if(s.mode==='survival'){ s.youLives=3; s.oppLives=3; }
   if(!QUESTIONS||QUESTIONS.length===0){
@@ -652,7 +551,13 @@ function beginMatch(direct){
   render();
   matchTimer=setTimeout(toCountdown, direct?1700:2300);
 }
-function onRematch(){s.mode=s.mode||'classic';s.lastWinner=s.youWon?'you':'opp';startMatchmaking(s.mode,s.matchCategory);}
+function onRematch(){s.lastWinner=s.youWon?'you':'opp';startSoloMatch(s.mode||'classic',s.matchCategory||'General');}
+async function onSendChallenge(){
+  if(s.challengeCode){navigator.clipboard?.writeText(s.challengeCode);return;}
+  if(!s.savedMatchId){alert('Match not saved yet, try again in a moment.');return;}
+  const code=await sendChallenge(s.savedMatchId);
+  if(code){s.challengeCode=code;render();}
+}
 function toCountdown(){
   clearTimers(); s.screen='countdown'; s.cd=3; render();
   cdTimer=setInterval(()=>{ s.cd--; if(s.cd<=0){clearInterval(cdTimer);startQuestion(0);}else render(); },850);
@@ -777,7 +682,17 @@ function nextQ(){
   if(ni>=QUESTIONS.length) toSummary();
   else startQuestion(ni);
 }
-function toSummary(){clearTimers();s.youWon=s.youScore>s.oppScore;s.screen='summary';render();saveMatch();}
+async function toSummary(){
+  clearTimers();
+  s.youWon=s.youScore>s.oppScore;
+  s.screen='summary';
+  s.challengeCode=null;
+  s.savedMatchId=null;
+  render();
+  saveMatch();
+  const matchData=await saveMatchResult();
+  if(matchData) s.savedMatchId=matchData.id;
+}
 function quitMatch(){s.quitConfirm=true;render();}
 function confirmQuit(){goHome();}
 function cancelQuit(){s.quitConfirm=false;render();}
@@ -1092,7 +1007,7 @@ function renderFriends(){
 }
 
 function renderMatching(){
-  const opp=s.opp; const direct=s.directChallenge;
+  const p=getP();
   return `<div style="display:flex;flex-direction:column;height:100%;padding:6px 24px 22px;color:#fff;">
     <div style="display:flex;align-items:center;margin-top:6px;">
       <div onclick="goHome()" style="width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;">${ic('close',22,'#C9BCEC')}</div>
@@ -1105,9 +1020,9 @@ function renderMatching(){
       <div style="width:42px;"></div>
     </div>
     <div style="text-align:center;margin-top:24px;">
-      <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:13px;letter-spacing:.18em;color:var(--accent);">${direct?'DIRECT CHALLENGE':'FINDING OPPONENT'}</div>
+      <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:13px;letter-spacing:.18em;color:var(--accent);">SOLO TRIVIA</div>
       <div style="display:flex;align-items:center;justify-content:center;gap:9px;margin-top:8px;">
-        <span style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:25px;">${direct?'Challenging':'Matchmaking'}</span>
+        <span style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:25px;">Get Ready</span>
         <span style="display:inline-flex;gap:4px;padding-bottom:6px;">
           <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 1.2s infinite;"></span>
           <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 1.2s infinite .25s;"></span>
@@ -1116,19 +1031,10 @@ function renderMatching(){
       </div>
     </div>
     <div style="flex:1;display:flex;align-items:center;justify-content:center;">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:9px;animation:floaty 3.2s ease-in-out infinite;">
-        ${av(90,'#FF8FA8','#FF5D7A','M','#fff',3,'rgba(255,255,255,.9)')}
-        <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:15px;">You</div>
-      </div>
-      <div style="z-index:3;width:56px;height:56px;border-radius:50%;background:#FFC93C;color:#2A1556;font-family:'Fredoka',sans-serif;font-weight:700;font-size:19px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(255,201,60,.5);border:4px solid #1C0F40;margin:0 -16px;">VS</div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:9px;">
-        <div style="position:relative;width:90px;height:90px;display:flex;align-items:center;justify-content:center;">
-          <div style="position:absolute;inset:0;border-radius:50%;border:2px solid #34E0C8;animation:pulseRing 2.1s ease-out infinite;"></div>
-          <div style="position:absolute;inset:0;border-radius:50%;border:2px solid #34E0C8;animation:pulseRing 2.1s ease-out infinite .7s;"></div>
-          <div style="position:absolute;inset:0;border-radius:50%;border:2px solid #34E0C8;animation:pulseRing 2.1s ease-out infinite 1.4s;"></div>
-          ${direct ? av(90,opp.c1,opp.c2,opp.initial,opp.tc,3,'rgba(255,255,255,.9)') : `<div style="width:90px;height:90px;border-radius:50%;background:rgba(52,224,200,.14);border:2px dashed rgba(52,224,200,.6);display:flex;align-items:center;justify-content:center;font-family:'Fredoka',sans-serif;font-weight:700;font-size:40px;color:#34E0C8;">?</div>`}
-        </div>
-        <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:15px;color:#34E0C8;">${direct?opp.name:'Searching...'}</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:14px;animation:floaty 3.2s ease-in-out infinite;">
+        ${av(100,'#FF8FA8','#FF5D7A',pInit(p),'#fff',3,'rgba(255,255,255,.9)')}
+        <div style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:16px;">${p.display_name}</div>
+        <div style="font-size:12px;color:#B9A9E0;">Loading questions...</div>
       </div>
     </div>
     <!-- Trivia Tip Carousel -->
@@ -1381,7 +1287,10 @@ function renderSummary(){
 
     <div style="flex:1;min-height:20px;"></div>
     <div onclick="onRematch()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:#fff;padding:16px;border-radius:18px;font-family:'Fredoka',sans-serif;font-weight:600;font-size:17px;cursor:pointer;box-shadow:0 12px 26px rgba(255,93,122,.4);margin-top:20px;">
-      ${ic('replay',21,'#fff')}Rematch
+      ${ic('replay',21,'#fff')}Play Again
+    </div>
+    <div onclick="onSendChallenge()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(139,108,240,.18);border:1.5px solid rgba(139,108,240,.4);color:#B79CFF;padding:15px;border-radius:18px;font-family:'Fredoka',sans-serif;font-weight:600;font-size:16px;cursor:pointer;margin-top:11px;">
+      ${ic('send',19,'#B79CFF')}${s.challengeCode?`Code: <b style="letter-spacing:.1em;">${s.challengeCode}</b> — Tap to copy`:'Challenge a Friend'}
     </div>
     <div onclick="goHome()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid rgba(255,255,255,.22);color:#fff;padding:15px;border-radius:18px;font-family:'Fredoka',sans-serif;font-weight:500;font-size:16px;cursor:pointer;margin-top:11px;">Back to Home</div>
   </div>`;
