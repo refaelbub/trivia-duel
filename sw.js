@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trivia-duel-v3';
+const CACHE_NAME = 'trivia-duel-v4';
 const urlsToCache = [
   '/',
   '/index.html',
