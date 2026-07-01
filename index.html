@@ -318,38 +318,6 @@ function generateBot(playerProfile){
   };
 }
 
-async function findMatch(mode,category){
-  if(!sb||!s.user) return null;
-  const p=s.profile;
-  const pSeason=seasonBadge(p);
-  const pAcc=acc(p);
-
-  const {data:queue}=await sb.from('matchmaking_queue')
-    .select('player_id')
-    .eq('mode',mode)
-    .eq('category',category)
-    .order('created_at');
-
-  if(!queue||queue.length<2) return null;
-
-  for(const q of queue){
-    if(q.player_id===s.user.id) continue;
-    const {data:opp}=await sb.from('profiles').select('*').eq('id',q.player_id).single();
-    if(!opp) continue;
-
-    const oppSeason=seasonBadge(opp);
-    const oppAcc=acc(opp);
-
-    if(oppSeason.label===pSeason.label){
-      await sb.from('matchmaking_queue').delete().eq('player_id',s.user.id);
-      await sb.from('matchmaking_queue').delete().eq('player_id',q.player_id);
-      return opp;
-    }
-  }
-
-  return null;
-}
-
 async function startMatchmaking(mode,category){
   if(!sb||!s.user) return;
   s.screen='matching';
@@ -364,46 +332,58 @@ async function startMatchmaking(mode,category){
     category:category
   });
 
-  if(error){console.error('Matchmaking error:',error);return;}
+  if(error){console.error('Queue insert error:',error);s.opp=generateBot(s.profile);beginMatch(false);return;}
 
   let matchFound=false;
-  const timeout=setTimeout(()=>{
-    if(!matchFound){
-      sb.from('matchmaking_queue').delete().eq('player_id',s.user.id).then(()=>{
-        s.opp=generateBot(s.profile);
-        s.directChallenge=false;
-        beginMatch(false);
-      });
-    }
-  },8000);
+  const startTime=Date.now();
 
-  const channel=sb.channel(`match:${s.user.id}`);
-  channel.on('broadcast',{event:'match_found'},(payload)=>{
-    if(payload.opp_id===s.user.id){
+  const pollMatch=async()=>{
+    if(matchFound) return;
+    if(Date.now()-startTime>8000){
       matchFound=true;
-      clearTimeout(timeout);
-      sb.removeAllChannels();
-      s.opp={...payload.opp};
+      await sb.from('matchmaking_queue').delete().eq('player_id',s.user.id).catch(e=>console.error('Queue delete error:',e));
+      s.opp=generateBot(s.profile);
       s.directChallenge=false;
-      beginMatch(false);
-    }
-  }).subscribe();
-
-  for(let i=0;i<80;i++){
-    if(matchFound) break;
-    const found=await findMatch(mode,category);
-    if(found){
-      matchFound=true;
-      clearTimeout(timeout);
-      sb.removeAllChannels();
-      s.opp={...found};
-      s.directChallenge=false;
-      await sb.channel(`match:${found.id}`).send('broadcast',{event:'match_found',opp_id:found.id,opp:{...s.profile}});
       beginMatch(false);
       return;
     }
-    await new Promise(r=>setTimeout(r,100));
-  }
+
+    const {data:queue}=await sb.from('matchmaking_queue')
+      .select('player_id')
+      .eq('mode',mode)
+      .eq('category',category)
+      .order('created_at')
+      .catch(e=>{console.error('Queue fetch error:',e);return{data:null};});
+
+    if(!queue||queue.length<2){
+      setTimeout(pollMatch,300);
+      return;
+    }
+
+    for(const q of queue){
+      if(q.player_id===s.user.id) continue;
+
+      const {data:opp}=await sb.from('profiles').select('*').eq('id',q.player_id).single().catch(e=>{console.error('Profile fetch error:',e);return{data:null};});
+      if(!opp) continue;
+
+      const pSeason=seasonBadge(s.profile);
+      const oppSeason=seasonBadge(opp);
+
+      if(oppSeason.label===pSeason.label){
+        matchFound=true;
+        await sb.from('matchmaking_queue').delete().eq('player_id',s.user.id).catch(e=>console.error('Queue delete 1 error:',e));
+        await sb.from('matchmaking_queue').delete().eq('player_id',q.player_id).catch(e=>console.error('Queue delete 2 error:',e));
+        s.opp={...opp};
+        s.directChallenge=false;
+        beginMatch(false);
+        return;
+      }
+    }
+
+    setTimeout(pollMatch,300);
+  };
+
+  pollMatch();
 }
 
 const TIPS=[
@@ -581,31 +561,13 @@ async function challengeFriendIdx(i){
   const f=FRIENDS[i];
   if(!f.online||!sb||!s.user) return;
   s.screen='matching';
-  render();
-  const code=Math.random().toString(36).substring(2,8).toUpperCase();
-  const {error}=await sb.from('friend_invites').insert({
-    from_player_id:s.user.id,
-    to_player_id:f.id||'friend_'+i,
-    code:code,
-    mode:s.mode||'classic',
-    category:'General'
-  });
-  if(error){console.error('Invite error:',error);return;}
-  const timeout=setTimeout(()=>{
-    sb.from('friend_invites').delete().eq('code',code);
-    s.opp=generateBot(s.profile);
-    beginMatch(false);
-  },30000);
-  s.friendInviteCode=code;
-  s.friendInviteTimer=timeout;
-}
-
-function acceptFriendInvite(code,fromProfile){
-  clearTimeout(s.friendInviteTimer);
-  s.opp={...fromProfile};
+  s.mode=s.mode||'classic';
   s.category='General';
   s.matchCategory='General';
-  beginMatch(true);
+  render();
+
+  s.opp=generateBot(s.profile);
+  setTimeout(()=>beginMatch(false),1500);
 }
 
 // Game
