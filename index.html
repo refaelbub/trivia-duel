@@ -328,16 +328,7 @@ function generateBot(playerProfile){
   };
 }
 
-async function startMatchmaking(mode,category){
-  if(!sb||!s.user){console.error('Matchmaking init failed: sb or user missing');return;}
-  console.log('🔍 Matchmaking started:',mode,category);
-  s.screen='matching';
-  s.matchCategory=category;
-  s.category=category;
-  s.mode=mode;
-
-  const seed=Math.floor(Date.now()/1000);
-
+function setupQuestions(mode,seed){
   if(mode==='timeattack'){
     QUESTIONS=seededShuffle(QUESTION_BANK,seed).slice(0,100);
   } else if(mode==='handicap' && s.lastWinner){
@@ -346,6 +337,15 @@ async function startMatchmaking(mode,category){
   } else {
     QUESTIONS=seededShuffle(QUESTION_BANK,seed).slice(0,5);
   }
+}
+
+async function startMatchmaking(mode,category){
+  if(!sb||!s.user){console.error('Matchmaking init failed: sb or user missing');return;}
+  console.log('🔍 Matchmaking started:',mode,category);
+  s.screen='matching';
+  s.matchCategory=category;
+  s.category=category;
+  s.mode=mode;
 
   render();
 
@@ -378,6 +378,9 @@ async function startMatchmaking(mode,category){
       }catch(e){
         console.error('Queue delete error:',e);
       }
+      const seed=Math.floor(Date.now()/1000);
+      s.matchSeed=seed;
+      setupQuestions(s.mode,seed);
       s.opp=generateBot(s.profile);
       s.directChallenge=false;
       beginMatch(false);
@@ -432,6 +435,9 @@ async function startMatchmaking(mode,category){
         }catch(e){
           console.error('Queue delete error:',e);
         }
+        const seed=parseInt(s.user.id.slice(0,8),16)^parseInt(q.player_id.slice(0,8),16);
+        s.matchSeed=seed;
+        setupQuestions(s.mode,seed);
         s.opp={...opp};
         s.directChallenge=false;
         beginMatch(false);
@@ -636,6 +642,9 @@ function beginTimeAttack(){
 }
 function beginMatch(direct){
   if(s.mode==='survival'){ s.youLives=3; s.oppLives=3; }
+  if(!QUESTIONS||QUESTIONS.length===0){
+    setupQuestions(s.mode,s.matchSeed||Math.floor(Date.now()/100));
+  }
   clearTimers(); s.correctCount=0; s.directChallenge=direct;
   Object.assign(s,{youScore:0,oppScore:0,qIndex:0,pu:{fifty:1,freeze:1,double:1},puUsed:{},doubleActive:false,oppFrozen:false,hidden:[],screen:'matching',timeAttackRemain:60});
   render();
@@ -1253,7 +1262,7 @@ function renderDuel(){
               <span style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:18px;color:${resCol};">${resTitle}</span>
               ${s.mode!=='timeattack'?`<span style="font-size:12px;color:#B9A9E0;">You <b style="color:var(--accent);">+${s.youGain}</b> · ${opp.display_name||opp.name} <b style="color:#34E0C8;">+${s.oppGain}</b></span>`:''}
             </div>
-            <span style="font-size:11px;color:#8676A8;text-align:center;">Next question in ${Math.ceil((revealEndTime-Date.now())/1000)}s</span>
+            <span style="font-size:11px;color:#8676A8;text-align:center;">Next question in ${Math.ceil((s.revealEndTime-Date.now())/1000)}s</span>
           </div>`
         : `<div onclick="quitMatch()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid rgba(255,255,255,.2);color:#B9A9E0;padding:13px;border-radius:16px;font-family:'Fredoka',sans-serif;font-weight:500;font-size:15px;cursor:pointer;margin-top:4px;">${ic('close',19,'#B9A9E0')}Quit Match</div>`}
     </div>
