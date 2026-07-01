@@ -192,6 +192,16 @@ const QUESTION_BANK = [
   { cat:'General',   icon:'lunch_dining',    col:'#FF914D', q:'Honey can remain edible for thousands of years if stored properly.', type:'true_false', correct:0, difficulty:'medium' },
 ];
 function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a; }
+function seededShuffle(arr,seed){
+  const a=[...arr];
+  let rng=seed;
+  for(let i=a.length-1;i>0;i--){
+    rng=(rng*9301+49297)%233280;
+    const j=Math.floor((rng/233280)*i);
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
 let QUESTIONS = shuffle(QUESTION_BANK).slice(0,5);
 const CATS = [
   {name:'General',   icon:'psychology',   color:'#FFC93C'},
@@ -326,13 +336,15 @@ async function startMatchmaking(mode,category){
   s.category=category;
   s.mode=mode;
 
+  const seed=Math.floor(Date.now()/1000);
+
   if(mode==='timeattack'){
-    QUESTIONS=shuffle(QUESTION_BANK).slice(0,100);
+    QUESTIONS=seededShuffle(QUESTION_BANK,seed).slice(0,100);
   } else if(mode==='handicap' && s.lastWinner){
     const isYouChamp=s.lastWinner==='you';
-    QUESTIONS=shuffle(QUESTION_BANK.filter(q=>!q.difficulty||q.difficulty===(isYouChamp?'hard':'easy'))).slice(0,5);
+    QUESTIONS=seededShuffle(QUESTION_BANK.filter(q=>!q.difficulty||q.difficulty===(isYouChamp?'hard':'easy')),seed).slice(0,5);
   } else {
-    QUESTIONS=shuffle(QUESTION_BANK).slice(0,5);
+    QUESTIONS=seededShuffle(QUESTION_BANK,seed).slice(0,5);
   }
 
   render();
@@ -698,9 +710,17 @@ function reveal(timedOut){
     s.youFaster=youRight&&oppRight&&youTime<s.oppTime;
     Object.assign(s,{youScore:s.youScore+youGain,oppScore:s.oppScore+oppGain,youGain,oppGain});
   }
-  Object.assign(s,{phase:'revealed',oppAnswered:oppInTime});
+  const revealDuration=s.mode==='survival'?2200:3400;
+  Object.assign(s,{phase:'revealed',oppAnswered:oppInTime,revealEndTime:Date.now()+revealDuration});
   render();
-  revealTimer=setTimeout(nextQ, s.mode==='survival'?2200:3400);
+  revealTimer=setInterval(()=>{
+    if(Date.now()>=s.revealEndTime){
+      clearInterval(revealTimer);
+      nextQ();
+    } else {
+      updateTimer();
+    }
+  },100);
 }
 function nextQ(){
   clearTimeout(revealTimer);
@@ -1228,12 +1248,12 @@ function renderDuel(){
     <!-- Bottom -->
     <div style="margin-top:auto;padding-top:12px;">
       ${revealed
-        ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;animation:riseIn .3s ease-out;">
+        ? `<div style="display:flex;flex-direction:column;gap:8px;animation:riseIn .3s ease-out;">
             <div style="display:flex;flex-direction:column;">
               <span style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:18px;color:${resCol};">${resTitle}</span>
-              ${s.mode!=='timeattack'?`<span style="font-size:12px;color:#B9A9E0;">You <b style="color:var(--accent);">+${s.youGain}</b> · ${opp.name} <b style="color:#34E0C8;">+${s.oppGain}</b></span>`:''}
+              ${s.mode!=='timeattack'?`<span style="font-size:12px;color:#B9A9E0;">You <b style="color:var(--accent);">+${s.youGain}</b> · ${opp.display_name||opp.name} <b style="color:#34E0C8;">+${s.oppGain}</b></span>`:''}
             </div>
-            <div onclick="nextQ()" style="display:flex;align-items:center;gap:6px;background:var(--accent);color:#fff;padding:12px 22px;border-radius:999px;font-family:'Fredoka',sans-serif;font-weight:600;font-size:15px;cursor:pointer;box-shadow:0 8px 18px rgba(255,93,122,.4);">Next${ic('arrow_forward',19,'#fff')}</div>
+            <span style="font-size:11px;color:#8676A8;text-align:center;">Next question in ${Math.ceil((revealEndTime-Date.now())/1000)}s</span>
           </div>`
         : `<div onclick="quitMatch()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid rgba(255,255,255,.2);color:#B9A9E0;padding:13px;border-radius:16px;font-family:'Fredoka',sans-serif;font-weight:500;font-size:15px;cursor:pointer;margin-top:4px;">${ic('close',19,'#B9A9E0')}Quit Match</div>`}
     </div>
