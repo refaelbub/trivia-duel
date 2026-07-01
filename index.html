@@ -351,24 +351,28 @@ async function startMatchmaking(mode,category){
     if(elapsed>8000){
       console.log('⏱ 8s timeout - spawning bot');
       matchFound=true;
-      await sb.from('matchmaking_queue').delete().eq('player_id',s.user.id).catch(e=>console.error('Queue delete error:',e));
+      try{
+        await sb.from('matchmaking_queue').delete().eq('player_id',s.user.id);
+      }catch(e){
+        console.error('Queue delete error:',e);
+      }
       s.opp=generateBot(s.profile);
       s.directChallenge=false;
       beginMatch(false);
       return;
     }
 
-    const {data:queue,error:qErr}=await sb.from('matchmaking_queue')
-      .select('player_id')
-      .eq('mode',mode)
-      .eq('category',category)
-      .order('created_at')
-      .catch(e=>{console.error('Queue fetch error:',e);return{data:null,error:e};});
-
-    if(qErr){
-      console.error('Queue error:',qErr);
-      setTimeout(pollMatch,300);
-      return;
+    let queue=null;
+    try{
+      const res=await sb.from('matchmaking_queue')
+        .select('player_id')
+        .eq('mode',mode)
+        .eq('category',category)
+        .order('created_at');
+      queue=res.data;
+      if(res.error) console.error('Queue fetch error:',res.error);
+    }catch(e){
+      console.error('Queue fetch exception:',e);
     }
 
     console.log('Queue size:',queue?.length||0);
@@ -381,8 +385,16 @@ async function startMatchmaking(mode,category){
     for(const q of queue){
       if(q.player_id===s.user.id) continue;
 
-      const {data:opp,error:oErr}=await sb.from('profiles').select('*').eq('id',q.player_id).single().catch(e=>{return{data:null,error:e};});
-      if(!opp||oErr){console.log('Profile fetch failed for',q.player_id);continue;}
+      let opp=null;
+      try{
+        const res=await sb.from('profiles').select('*').eq('id',q.player_id).single();
+        opp=res.data;
+        if(res.error){console.log('Profile fetch error for',q.player_id,':',res.error);continue;}
+      }catch(e){
+        console.log('Profile fetch exception for',q.player_id,':',e);
+        continue;
+      }
+      if(!opp){console.log('No profile for',q.player_id);continue;}
 
       const pSeason=seasonBadge(s.profile);
       const oppSeason=seasonBadge(opp);
@@ -392,8 +404,12 @@ async function startMatchmaking(mode,category){
       if(oppSeason.label===pSeason.label){
         console.log('✨ MATCH FOUND:',opp.display_name);
         matchFound=true;
-        await sb.from('matchmaking_queue').delete().eq('player_id',s.user.id).catch(e=>console.error('Queue delete 1:',e));
-        await sb.from('matchmaking_queue').delete().eq('player_id',q.player_id).catch(e=>console.error('Queue delete 2:',e));
+        try{
+          await sb.from('matchmaking_queue').delete().eq('player_id',s.user.id);
+          await sb.from('matchmaking_queue').delete().eq('player_id',q.player_id);
+        }catch(e){
+          console.error('Queue delete error:',e);
+        }
         s.opp={...opp};
         s.directChallenge=false;
         beginMatch(false);
